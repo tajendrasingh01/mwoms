@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Roles supported in V1.0. Mirrors src/types/auth.ts on the frontend.
+enum Role {
+  ADMIN
+  SHIFT_INCHARGE
+  VIEWER
+}
+
+/// A system user (mine staff who can log in). Distinct from the future
+/// Employee Master record — a User is "someone who logs in", an
+/// Employee is "someone tracked on the roster". They may later be
+/// linked 1:1, but are kept separate so Employee Master (a later
+/// milestone) doesn't force every tracked worker to have a login.
+model User {
+  id           String   @id @default(cuid())
+  employeeId   String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(VIEWER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  shiftInChargeFor  ShiftAllocation[] @relation("ShiftInCharge")
+  createdAllocations ShiftAllocation[] @relation("CreatedAllocations")
+
+  @@map("users")
+}
+
+/// Employee Master record — the tracked roster of mine workers.
+/// Age is deliberately NOT stored (it would go stale); it's computed
+/// from dateOfBirth at read time in the API layer instead.
+model Employee {
+  id            String   @id @default(cuid())
+  employeeId    String   @unique
+  name          String
+  dateOfBirth   DateTime
+  experienceYrs Decimal  @db.Decimal(4, 1)
+  designation   String
+  department    String
+  skill         String
+  dateOfJoining DateTime
+  pmeExpiry     DateTime?
+  vtcExpiry     DateTime?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  shiftAssignments ShiftAllocationEmployee[]
+
+  @@map("employees")
+}
+
+/// Fixed V1.0 shift schedule (not user-configurable per the spec):
+///   GENERAL 06:00–14:00   FIRST 11:00–19:00
+///   SECOND  16:00–24:00   THIRD 23:00–07:00 (next day)
+/// The exact hours live in src/constants/shift-schedule.ts, not here —
+/// this enum only names the four shift types.
+enum ShiftType {
+  GENERAL
+  FIRST
+  SECOND
+  THIRD
+}
+
+/// One shift's roster for a given date + district/panel: who's the
+/// shift in-charge, and (via ShiftAllocationEmployee) who's assigned
+/// and to what work. `date` is the shift's start date — for THIRD
+/// (23:00–07:00), that means the shift "belongs to" the evening it
+/// starts, even though it ends the next calendar day.
+model ShiftAllocation {
+  id            String    @id @default(cuid())
+  date          DateTime  @db.Date
+  shiftType     ShiftType
+  districtPanel String
+
+  shiftInChargeId String
+  shiftInCharge   User   @relation("ShiftInCharge", fields: [shiftInChargeId], references: [id])
+
+  createdById String
+  createdBy   User   @relation("CreatedAllocations", fields: [createdById], references: [id])
+
+  assignments ShiftAllocationEmployee[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One roster per date + shift + panel — re-saving the same
+  // date/shift/panel updates that roster rather than creating a
+  // duplicate.
+  @@unique([date, shiftType, districtPanel])
+  @@map("shift_allocations")
+}
+
+/// A single employee's assignment within a shift roster, plus what
+/// they're authorized to do — this is the "designating them to
+/// authorized work" the spec calls for.
+model ShiftAllocationEmployee {
+  id                String   @id @default(cuid())
+  shiftAllocationId String
+  shiftAllocation   ShiftAllocation @relation(fields: [shiftAllocationId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  authorizedWork String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([shiftAllocationId, employeeId])
+  @@map("shift_allocation_employees")
+}
