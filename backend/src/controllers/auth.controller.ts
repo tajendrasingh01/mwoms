@@ -41,6 +41,7 @@ export async function login(req: Request, res: Response) {
     employeeId: user.employeeId,
     name: user.name,
     role: user.role,
+    relay: user.relay ?? undefined,
   };
 
   return res.json({ user: req.session.user });

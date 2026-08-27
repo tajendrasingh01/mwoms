@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: mwoms
+    runtime: node
+    plan: free
+    buildCommand: npm ci --prefix frontend && npm ci --prefix backend && npm run build --prefix frontend && npm run prisma:generate --prefix backend && npm run prisma:push --prefix backend && npm run build --prefix backend
+    startCommand: npm run start --prefix backend
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: https://mwoms.onrender.com
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: SESSION_COOKIE_SAMESITE
+        value: none

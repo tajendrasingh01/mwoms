@@ -1,5 +1,5 @@
 import "express-session";
-import type { Role } from "@prisma/client";
+import type { Relay, Role } from "@prisma/client";
 
 declare module "express-session" {
   interface SessionData {
@@ -8,6 +8,7 @@ declare module "express-session" {
       employeeId: string;
       name: string;
       role: Role;
+      relay?: Relay;
     };
   }
 }

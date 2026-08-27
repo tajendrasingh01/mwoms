@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Loader2, Pencil, Users } from "lucide-react";
+import { Plus, Loader2, Pencil, Users, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,12 +9,17 @@ import { Badge } from "@/components/ui/badge";
 import { ExpiryStatusBadge } from "@/components/common/ExpiryStatusBadge";
 import { ShiftAllocationFormDialog } from "@/components/common/ShiftAllocationFormDialog";
 import { useShiftOverview } from "@/hooks/use-dashboard";
+import { useDeleteShiftAllocation } from "@/hooks/use-shift-allocations";
 import { useAuth } from "@/store/auth-store";
 import { SHIFT_SCHEDULE, type ShiftTypeValue } from "@/constants/shift-schedule";
 import type { ShiftAllocation } from "@/types/shift-allocation";
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function displayDate(value: string | null): string {
+  return value ? new Date(value).toLocaleDateString() : "—";
 }
 
 export function ShiftAllocationPage() {
@@ -27,6 +32,13 @@ export function ShiftAllocationPage() {
   const [prefillShiftType, setPrefillShiftType] = useState<ShiftTypeValue | undefined>();
 
   const { data, isLoading } = useShiftOverview(date);
+  const deleteAllocation = useDeleteShiftAllocation();
+
+  const handleDelete = (allocation: ShiftAllocation) => {
+    if (window.confirm(`Delete the ${allocation.shiftLabel} roster for ${allocation.date}?`)) {
+      deleteAllocation.mutate(allocation.id);
+    }
+  };
 
   const openNewFor = (shiftType?: ShiftTypeValue) => {
     setEditingAllocation(null);
@@ -97,7 +109,7 @@ export function ShiftAllocationPage() {
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <p className="text-sm font-medium text-foreground">
-                            {allocation.districtPanel}
+                            {allocation.districtPanel === "Shift Roster" ? "Shift Roster" : allocation.districtPanel}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             In-Charge: {allocation.shiftInCharge.name} (
@@ -110,14 +122,14 @@ export function ShiftAllocationPage() {
                             {allocation.headcount}
                           </Badge>
                           {canEdit && (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="size-7"
-                              onClick={() => openEdit(allocation)}
-                            >
-                              <Pencil className="size-3.5" />
-                            </Button>
+                            <>
+                              <Button size="icon" variant="ghost" className="size-7" onClick={() => openEdit(allocation)} aria-label="Edit roster">
+                                <Pencil className="size-3.5" />
+                              </Button>
+                              <Button size="icon" variant="ghost" className="size-7" onClick={() => handleDelete(allocation)} disabled={deleteAllocation.isPending} aria-label="Delete roster">
+                                <Trash2 className="size-3.5 text-danger" />
+                              </Button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -134,6 +146,9 @@ export function ShiftAllocationPage() {
                                 {a.authorizedWork && (
                                   <span className="text-muted-foreground"> — {a.authorizedWork}</span>
                                 )}
+                              </span>
+                              <span className="hidden text-[11px] text-muted-foreground xl:inline">
+                                PME {displayDate(a.employee.pmeDate)} → {displayDate(a.employee.pmeExpiry)} ({a.employee.pmeDaysLeft ?? "—"}d) · VTC {displayDate(a.employee.vtcDate)} → {displayDate(a.employee.vtcExpiry)} ({a.employee.vtcDaysLeft ?? "—"}d)
                               </span>
                               <span className="flex shrink-0 gap-1">
                                 <ExpiryStatusBadge status={a.employee.pmeStatus} />

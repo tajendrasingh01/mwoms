@@ -1,13 +1,80 @@
 import type { Request, Response } from "express";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, Relay } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-import { serializeEmployee } from "@/lib/employee-utils";
+import {
+  calculatePmeDueDate,
+  calculateVtcDueDate,
+  serializeEmployee,
+} from "@/lib/employee-utils";
 import {
   createEmployeeSchema,
   updateEmployeeSchema,
   listEmployeesQuerySchema,
 } from "@/types/employee.schema";
+
+function buildExpiryFilter(status: string | undefined, field: "pmeExpiry" | "vtcExpiry") {
+  if (!status) return undefined;
+  const now = new Date();
+  const warningThreshold = new Date();
+  warningThreshold.setDate(now.getDate() + 30);
+
+  switch (status) {
+    case "VALID":
+      return { [field]: { gt: warningThreshold } };
+    case "DUE_SOON":
+      return { [field]: { gt: now, lte: warningThreshold } };
+    case "EXPIRED":
+      return { [field]: { lt: now } };
+    case "NOT_SET":
+      return { [field]: null };
+    default:
+      return undefined;
+  }
+}
+
+function getSessionUser(req: Request) {
+  return req.session.user;
+}
+
+function sameDate(left: Date | null | undefined, right: Date | null | undefined) {
+  return left?.getTime() === right?.getTime();
+}
+
+function getAbsenceDays(leaveStart: Date | null | undefined, leaveEnd: Date | null | undefined, fallback = 0) {
+  if (!leaveStart || !leaveEnd) return fallback;
+  return Math.max(0, Math.ceil((leaveEnd.getTime() - leaveStart.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
+function getCertificationDates(data: {
+  dateOfBirth: Date;
+  employeeType: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF";
+  pmeDate?: Date | null;
+  vtcDate?: Date | null;
+  leaveStart?: Date | null;
+  leaveEnd?: Date | null;
+  rejoiningDate?: Date | null;
+  absenceDays?: number | null;
+}) {
+  const absenceDays = getAbsenceDays(data.leaveStart, data.leaveEnd, data.absenceDays ?? 0);
+  const pmeExpiry = data.pmeDate ? calculatePmeDueDate(data.dateOfBirth, data.pmeDate) : null;
+  const vtcDate = data.employeeType === "DAILY_RATED" ? data.vtcDate ?? null : null;
+  const vtcExpiry = vtcDate
+    ? calculateVtcDueDate(vtcDate, absenceDays, data.rejoiningDate)
+    : null;
+
+  return { pmeExpiry, vtcDate, vtcExpiry, absenceDays };
+}
+
+function applyRelayAccessFilter(
+  user: { role: string; relay?: Relay } | undefined,
+  where: Prisma.EmployeeWhereInput,
+): Prisma.EmployeeWhereInput {
+  if (user?.role === "SHIFT_INCHARGE" && user?.relay) {
+    return { ...where, relay: user.relay };
+  }
+  return where;
+}
 
 /**
  * Express 5's route param types allow `string | string[]` (to support
@@ -37,10 +104,14 @@ export async function listEmployees(req: Request, res: Response) {
     });
   }
 
-  const { search, department, isActive, page, pageSize } = parseResult.data;
+  const { search, department, relay, designation, employeeType, pmeStatus, vtcStatus, isActive, page, pageSize } =
+    parseResult.data;
 
   const where: Prisma.EmployeeWhereInput = {
     ...(department ? { department } : {}),
+    ...(relay ? { relay } : {}),
+    ...(designation ? { designation } : {}),
+    ...(employeeType ? { employeeType } : {}),
     ...(isActive !== undefined ? { isActive } : {}),
     ...(search
       ? {
@@ -50,16 +121,21 @@ export async function listEmployees(req: Request, res: Response) {
           ],
         }
       : {}),
+    ...(pmeStatus ? buildExpiryFilter(pmeStatus, "pmeExpiry") : {}),
+    ...(vtcStatus ? buildExpiryFilter(vtcStatus, "vtcExpiry") : {}),
   };
+
+  const user = getSessionUser(req);
+  const allowedWhere = applyRelayAccessFilter(user, where);
 
   const [employees, total] = await Promise.all([
     prisma.employee.findMany({
-      where,
+      where: allowedWhere,
       orderBy: { name: "asc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
-    prisma.employee.count({ where }),
+    prisma.employee.count({ where: allowedWhere }),
   ]);
 
   return res.json({
@@ -82,6 +158,12 @@ export async function getEmployee(req: Request, res: Response) {
   if (!employee) {
     return res.status(404).json({ error: "Employee not found" });
   }
+
+  const user = getSessionUser(req);
+  if (user?.role === "SHIFT_INCHARGE" && user.relay && employee.relay !== user.relay) {
+    return res.status(403).json({ error: "Insufficient permissions" });
+  }
+
   return res.json({ data: serializeEmployee(employee) });
 }
 
@@ -102,7 +184,25 @@ export async function createEmployee(req: Request, res: Response) {
     return res.status(409).json({ error: "Employee ID already exists" });
   }
 
-  const employee = await prisma.employee.create({ data: parseResult.data });
+  const { pmeExpiry: _pmeExpiry, vtcExpiry: _vtcExpiry, ...sourceData } = parseResult.data;
+  const derived = getCertificationDates(sourceData);
+  const employee = await prisma.$transaction(async (tx) => {
+    const created = await tx.employee.create({ data: { ...sourceData, ...derived } });
+    const history = [];
+    if (created.pmeDate && created.pmeExpiry) history.push({ employeeId: created.id, type: "PME" as const, date: created.pmeDate, dueDate: created.pmeExpiry });
+    if (created.vtcDate && created.vtcExpiry) history.push({ employeeId: created.id, type: "VTC" as const, date: created.vtcDate, dueDate: created.vtcExpiry });
+    if (history.length) await tx.employeeCertification.createMany({ data: history });
+    if (created.leaveStart) await tx.employeeAbsence.create({
+      data: {
+        employeeId: created.id,
+        leaveStart: created.leaveStart,
+        leaveEnd: created.leaveEnd,
+        rejoiningDate: created.rejoiningDate,
+        absenceDays: created.absenceDays,
+      },
+    });
+    return created;
+  });
   return res.status(201).json({ data: serializeEmployee(employee) });
 }
 
@@ -136,9 +236,40 @@ export async function updateEmployee(req: Request, res: Response) {
     }
   }
 
-  const updated = await prisma.employee.update({
-    where: { id },
-    data: parseResult.data,
+  const { pmeExpiry: _pmeExpiry, vtcExpiry: _vtcExpiry, ...sourceData } = parseResult.data;
+  const nextValues = {
+    dateOfBirth: sourceData.dateOfBirth ?? employee.dateOfBirth,
+    employeeType: sourceData.employeeType ?? employee.employeeType,
+    pmeDate: sourceData.pmeDate === undefined ? employee.pmeDate : sourceData.pmeDate,
+    vtcDate: sourceData.vtcDate === undefined ? employee.vtcDate : sourceData.vtcDate,
+    leaveStart: sourceData.leaveStart === undefined ? employee.leaveStart : sourceData.leaveStart,
+    leaveEnd: sourceData.leaveEnd === undefined ? employee.leaveEnd : sourceData.leaveEnd,
+    rejoiningDate: sourceData.rejoiningDate === undefined ? employee.rejoiningDate : sourceData.rejoiningDate,
+    absenceDays: sourceData.absenceDays === undefined ? employee.absenceDays : sourceData.absenceDays ?? 0,
+  };
+  const derived = getCertificationDates(nextValues);
+  const updated = await prisma.$transaction(async (tx) => {
+    const result = await tx.employee.update({
+      where: { id },
+      data: { ...sourceData, ...derived },
+    });
+    const history = [];
+    if (result.pmeDate && result.pmeExpiry && !sameDate(result.pmeDate, employee.pmeDate)) history.push({ employeeId: id, type: "PME" as const, date: result.pmeDate, dueDate: result.pmeExpiry });
+    if (result.vtcDate && result.vtcExpiry && !sameDate(result.vtcDate, employee.vtcDate)) history.push({ employeeId: id, type: "VTC" as const, date: result.vtcDate, dueDate: result.vtcExpiry });
+    if (history.length) await tx.employeeCertification.createMany({ data: history });
+    if (result.leaveStart && (
+      !sameDate(result.leaveStart, employee.leaveStart) ||
+      !sameDate(result.rejoiningDate, employee.rejoiningDate)
+    )) await tx.employeeAbsence.create({
+      data: {
+        employeeId: id,
+        leaveStart: result.leaveStart,
+        leaveEnd: result.leaveEnd,
+        rejoiningDate: result.rejoiningDate,
+        absenceDays: result.absenceDays,
+      },
+    });
+    return result;
   });
   return res.json({ data: serializeEmployee(updated) });
 }

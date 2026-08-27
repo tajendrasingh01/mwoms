@@ -5,6 +5,7 @@ export interface SessionUser {
   employeeId: string;
   name: string;
   role: UserRole;
+  relay?: "RELAY_A" | "RELAY_B" | "RELAY_C";
 }
 
 export interface LoginPayload {

@@ -122,15 +122,15 @@ function ShiftAllocationForm({
 
   const handleSave = async () => {
     setFormError(null);
-    if (!date || !districtPanel.trim() || !shiftInChargeId) {
-      setFormError("Date, District/Panel, and Shift In-Charge are all required.");
+    if (!date || !shiftInChargeId) {
+      setFormError("Date and Shift In-Charge are required.");
       return;
     }
     try {
       await saveAllocation.mutateAsync({
         date,
         shiftType,
-        districtPanel: districtPanel.trim(),
+        districtPanel: districtPanel.trim() || "Shift Roster",
         shiftInChargeId,
         assignments: assigned.map((a) => ({
           employeeId: a.employee.id,
@@ -148,7 +148,7 @@ function ShiftAllocationForm({
       <DialogHeader>
         <DialogTitle>{isEditing ? "Edit Shift Allocation" : "New Shift Allocation"}</DialogTitle>
         <DialogDescription>
-          Assign employees to a shift, district/panel, and shift in-charge.
+          Create one roster for the shift. The Shift In-Charge is responsible for all assigned workers; add a location only when needed.
         </DialogDescription>
       </DialogHeader>
 
@@ -174,9 +174,9 @@ function ShiftAllocationForm({
               </Select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>District/Panel</Label>
+              <Label>Location (optional)</Label>
               <Input
-                placeholder="e.g. CM-1 Panel"
+                placeholder="Optional work location"
                 value={districtPanel}
                 onChange={(e) => setDistrictPanel(e.target.value)}
               />
@@ -233,7 +233,8 @@ function ShiftAllocationForm({
                     </div>
                   </div>
                   <Input
-                    placeholder="Authorized work (optional)"
+                    list="common-works"
+                    placeholder="Work (type or select)"
                     className="h-8 w-48"
                     value={a.authorizedWork}
                     onChange={(e) => handleAuthorizedWorkChange(a.employee.id, e.target.value)}
@@ -248,6 +249,15 @@ function ShiftAllocationForm({
                   </Button>
                 </div>
               ))}
+              <datalist id="common-works">
+                <option value="Mining" />
+                <option value="Drilling" />
+                <option value="Blasting" />
+                <option value="Electrical Maintenance" />
+                <option value="Mechanical Maintenance" />
+                <option value="Haulage" />
+                <option value="Safety Inspection" />
+              </datalist>
             </div>
           )}
 

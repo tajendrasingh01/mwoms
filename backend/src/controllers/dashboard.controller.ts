@@ -3,7 +3,8 @@ import type { Request, Response } from "express";
 import { prisma } from "@/lib/prisma";
 import { getExpiryStatus } from "@/lib/employee-utils";
 import { serializeShiftAllocation } from "@/lib/shift-allocation-utils";
-import { SHIFT_TYPES, isShiftActive, SHIFT_SCHEDULE, type ShiftTypeValue } from "@/constants/shift-schedule";
+import { serializeEmployee } from "@/lib/employee-utils";
+import { SHIFT_TYPES, SHIFT_SCHEDULE, type ShiftTypeValue } from "@/constants/shift-schedule";
 
 function startOfDay(date: Date): Date {
   const d = new Date(date);
@@ -18,12 +19,25 @@ function startOfDay(date: Date): Date {
  * allocation date is still yesterday's date.
  */
 function getCurrentShift(now = new Date()): { shiftType: ShiftTypeValue; date: Date } | null {
-  const today = startOfDay(now);
-  const yesterday = startOfDay(new Date(now.getTime() - 24 * 60 * 60 * 1000));
-
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(now).reduce<Record<string, string>>((result, part) => {
+    result[part.type] = part.value;
+    return result;
+  }, {});
+  const minutes = Number(parts.hour) * 60 + Number(parts.minute);
+  const today = new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00.000Z`);
+  const previous = new Date(today);
+  previous.setUTCDate(previous.getUTCDate() - 1);
+  const ranges: Record<ShiftTypeValue, [number, number]> = {
+    GENERAL: [360, 840], FIRST: [660, 1140], SECOND: [960, 1440], THIRD: [1380, 420],
+  };
   for (const shiftType of SHIFT_TYPES) {
-    if (isShiftActive(today, shiftType, now)) return { shiftType, date: today };
-    if (isShiftActive(yesterday, shiftType, now)) return { shiftType, date: yesterday };
+    const [start, end] = ranges[shiftType];
+    const active = start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
+    if (active) return { shiftType, date: minutes < end && start > end ? previous : today };
   }
   return null;
 }
@@ -75,6 +89,28 @@ export async function getDashboardSummary(_req: Request, res: Response) {
       vacantPositions: 0, // see note above
     },
   });
+}
+
+/** GET /api/dashboard/compliance/:type */
+export async function getComplianceEmployees(req: Request, res: Response) {
+  const type = req.params.type;
+  if (type !== "pme" && type !== "vtc") {
+    return res.status(400).json({ error: "Compliance type must be pme or vtc" });
+  }
+
+  const now = new Date();
+  const dueSoon = new Date(now);
+  dueSoon.setDate(dueSoon.getDate() + 30);
+  const expiryField = type === "pme" ? "pmeExpiry" : "vtcExpiry";
+  const employees = await prisma.employee.findMany({
+    where: {
+      isActive: true,
+      [expiryField]: { lte: dueSoon },
+    },
+    orderBy: [{ [expiryField]: "asc" }, { name: "asc" }],
+  });
+
+  return res.json({ data: employees.map(serializeEmployee) });
 }
 
 /**

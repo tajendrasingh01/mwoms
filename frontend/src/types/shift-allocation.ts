@@ -62,6 +62,8 @@ export interface DashboardSummary {
   vacantPositions: number;
 }
 
+export type ComplianceType = "pme" | "vtc";
+
 export interface ShiftOverviewGroup {
   shiftType: ShiftTypeValue;
   label: string;

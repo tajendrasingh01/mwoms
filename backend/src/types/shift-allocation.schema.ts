@@ -12,7 +12,7 @@ const assignmentSchema = z.object({
 export const saveShiftAllocationSchema = z.object({
   date: z.coerce.date(),
   shiftType: shiftTypeEnum,
-  districtPanel: z.string().trim().min(1, "District/Panel is required"),
+  districtPanel: z.string().trim().optional().default("Shift Roster"),
   shiftInChargeId: z.string().min(1, "Shift In-Charge is required"),
   assignments: z
     .array(assignmentSchema)

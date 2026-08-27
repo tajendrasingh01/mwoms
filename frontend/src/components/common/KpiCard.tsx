@@ -11,6 +11,7 @@ interface KpiCardProps {
   icon: LucideIcon;
   tone?: KpiTone;
   hint?: string;
+  onClick?: () => void;
 }
 
 const TONE_STYLES: Record<KpiTone, string> = {
@@ -26,9 +27,9 @@ const TONE_STYLES: Record<KpiTone, string> = {
  * Data is wired to the backend in a later milestone; for now it
  * renders whatever is passed in, including the loading placeholders.
  */
-export function KpiCard({ label, value, icon: Icon, tone = "default", hint }: KpiCardProps) {
+export function KpiCard({ label, value, icon: Icon, tone = "default", hint, onClick }: KpiCardProps) {
   return (
-    <Card>
+    <Card className={onClick ? "cursor-pointer transition-shadow hover:shadow-md" : undefined}>
       <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle>{label}</CardTitle>
         <div className={cn("flex size-8 items-center justify-center rounded-md", TONE_STYLES[tone])}>
@@ -38,6 +39,7 @@ export function KpiCard({ label, value, icon: Icon, tone = "default", hint }: Kp
       <CardContent>
         <p className="text-2xl font-semibold text-foreground">{value}</p>
         {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+        {onClick && <button type="button" className="mt-2 text-xs font-medium text-primary underline-offset-4 hover:underline" onClick={onClick}>View personnel</button>}
       </CardContent>
     </Card>
   );

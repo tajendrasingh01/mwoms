@@ -110,7 +110,7 @@ export async function saveShiftAllocation(req: Request, res: Response) {
     });
   }
 
-  const { date, shiftType, districtPanel, shiftInChargeId, assignments } = parseResult.data;
+  const { date, shiftType, districtPanel = "Shift Roster", shiftInChargeId, assignments } = parseResult.data;
   const userId = req.session.user!.id;
 
   const shiftInCharge = await prisma.user.findUnique({ where: { id: shiftInChargeId } });
@@ -165,4 +165,18 @@ export async function saveShiftAllocation(req: Request, res: Response) {
   });
 
   return res.status(existing ? 200 : 201).json({ data: serializeShiftAllocation(allocation) });
+}
+
+/** DELETE /api/shift-allocations/:id — Admin or Shift In-Charge only. */
+export async function deleteShiftAllocation(req: Request, res: Response) {
+  const id = getIdParam(req, res);
+  if (!id) return;
+
+  const allocation = await prisma.shiftAllocation.findUnique({ where: { id } });
+  if (!allocation) {
+    return res.status(404).json({ error: "Shift allocation not found" });
+  }
+
+  await prisma.shiftAllocation.delete({ where: { id } });
+  return res.status(204).send();
 }

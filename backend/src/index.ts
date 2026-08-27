@@ -1,7 +1,10 @@
 import "dotenv/config";
+import path from "node:path";
 import express from "express";
 import cors from "cors";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
+import { Pool } from "pg";
 
 import { env } from "@/config/env";
 import authRoutes from "@/routes/auth.routes";
@@ -10,6 +13,8 @@ import shiftAllocationRoutes from "@/routes/shift-allocation.routes";
 import userRoutes from "@/routes/user.routes";
 import notificationRoutes from "@/routes/notification.routes";
 import dashboardRoutes from "@/routes/dashboard.routes";
+import oneDriveRoutes from "@/routes/onedrive.routes";
+import { startOneDriveSync } from "@/services/onedrive-sync.service";
 
 const app = express();
 
@@ -26,8 +31,14 @@ app.use(
 );
 app.use(express.json());
 
+const PgSession = connectPgSimple(session);
+const sessionPool = new Pool({ connectionString: env.DATABASE_URL });
+
 app.use(
   session({
+    store: env.NODE_ENV === "production"
+      ? new PgSession({ pool: sessionPool, tableName: "user_sessions", createTableIfMissing: true })
+      : undefined,
     name: "mwoms.sid",
     secret: env.SESSION_SECRET,
     resave: false,
@@ -38,10 +49,6 @@ app.use(
       sameSite: env.SESSION_COOKIE_SAMESITE,
       maxAge: 1000 * 60 * 60 * 8, // 8 hours — matches a mine shift
     },
-    // NOTE: the default MemoryStore is fine for local dev only. Before
-    // deploying to Render, swap in connect-pg-simple (already installed)
-    // pointed at the same Neon database, so sessions survive restarts
-    // and work across multiple server instances.
   }),
 );
 
@@ -55,6 +62,15 @@ app.use("/api/shift-allocations", shiftAllocationRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/onedrive", oneDriveRoutes);
+
+if (env.NODE_ENV === "production") {
+  const frontendDist = path.resolve(__dirname, "../../frontend/dist");
+  app.use(express.static(frontendDist));
+  app.get("/{*splat}", (_req, res) => {
+    res.sendFile(path.join(frontendDist, "index.html"));
+  });
+}
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });
@@ -62,4 +78,5 @@ app.use((_req, res) => {
 
 app.listen(env.PORT, () => {
   console.log(`MWOMS backend listening on http://localhost:${env.PORT}`);
+  startOneDriveSync();
 });

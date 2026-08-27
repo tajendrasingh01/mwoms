@@ -16,6 +16,12 @@ const envSchema = z.object({
   // Codespaces/HTTPS; override in .env for local-only development.
   SESSION_COOKIE_SECURE: z.coerce.boolean().default(true),
   SESSION_COOKIE_SAMESITE: z.enum(["lax", "strict", "none"]).default("none"),
+  ONEDRIVE_CLIENT_ID: z.string().optional(),
+  ONEDRIVE_TENANT_ID: z.string().default("consumers"),
+  ONEDRIVE_FOLDER_PATH: z.string().default("MWOMS"),
+  ONEDRIVE_DR_FILE: z.string().default("DR MASTER.xlsx"),
+  ONEDRIVE_MR_FILE: z.string().default("MR.xlsx"),
+  ONEDRIVE_SYNC_INTERVAL_MINUTES: z.coerce.number().int().min(0).default(0),
 });
 
 const parsed = envSchema.safeParse(process.env);

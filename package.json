@@ -1,0 +1,16 @@
+{
+  "name": "mwoms",
+  "private": true,
+  "scripts": {
+    "install:all": "npm ci --prefix frontend && npm ci --prefix backend",
+    "dev": "concurrently -n FRONTEND,BACKEND \"npm run dev --prefix frontend\" \"npm run dev --prefix backend\"",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "build": "npm run build --prefix frontend && npm run build --prefix backend",
+    "lint": "npm run lint --prefix frontend && npm run lint --prefix backend",
+    "prisma:generate": "npm run prisma:generate --prefix backend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

@@ -13,6 +13,24 @@ enum Role {
   VIEWER
 }
 
+enum Relay {
+  RELAY_A @map("Relay A")
+  RELAY_B @map("Relay B")
+  RELAY_C @map("Relay C")
+}
+
+enum EmployeeType {
+  DAILY_RATED
+  MONTHLY_RATED
+  STAFF
+}
+
+enum EmployeeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 /// A system user (mine staff who can log in). Distinct from the future
 /// Employee Master record — a User is "someone who logs in", an
 /// Employee is "someone tracked on the roster". They may later be
@@ -24,12 +42,15 @@ model User {
   name         String
   passwordHash String
   role         Role     @default(VIEWER)
+  relay        Relay?
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   shiftInChargeFor  ShiftAllocation[] @relation("ShiftInCharge")
   createdAllocations ShiftAllocation[] @relation("CreatedAllocations")
+  employeeRequests EmployeeRequest[] @relation("RequestedBy")
+  reviewedRequests EmployeeRequest[] @relation("ReviewedBy")
 
   @@map("users")
 }
@@ -38,24 +59,70 @@ model User {
 /// Age is deliberately NOT stored (it would go stale); it's computed
 /// from dateOfBirth at read time in the API layer instead.
 model Employee {
-  id            String   @id @default(cuid())
-  employeeId    String   @unique
-  name          String
-  dateOfBirth   DateTime
-  experienceYrs Decimal  @db.Decimal(4, 1)
-  designation   String
-  department    String
-  skill         String
-  dateOfJoining DateTime
-  pmeExpiry     DateTime?
-  vtcExpiry     DateTime?
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                String   @id @default(cuid())
+  employeeId        String   @unique
+  name              String
+  fatherName        String?
+  dateOfBirth       DateTime
+  experienceYrs     Decimal  @db.Decimal(4, 1)
+  designation       String
+  grade             String?
+  department        String
+  skill             String
+  dateOfJoining     DateTime
+  pmeDate           DateTime?
+  pmeExpiry         DateTime?
+  vtcDate           DateTime?
+  vtcExpiry         DateTime?
+  leaveStart       DateTime?
+  leaveEnd         DateTime?
+  rejoiningDate    DateTime?
+  absenceDays      Int       @default(0)
+  medicalConditions String?
+  remark            String?
+  relay             Relay    @default(RELAY_A)
+  employeeType      EmployeeType @default(DAILY_RATED)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   shiftAssignments ShiftAllocationEmployee[]
+  certificationHistory EmployeeCertification[]
+  absences          EmployeeAbsence[]
 
   @@map("employees")
+}
+
+enum CertificationType {
+  PME
+  VTC
+}
+
+model EmployeeCertification {
+  id         String            @id @default(cuid())
+  employeeId String
+  employee   Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type       CertificationType
+  date       DateTime
+  dueDate    DateTime
+  createdAt  DateTime          @default(now())
+
+  @@index([employeeId, type, date])
+  @@map("employee_certification_history")
+}
+
+model EmployeeAbsence {
+  id            String   @id @default(cuid())
+  employeeId    String
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveStart    DateTime
+  leaveEnd      DateTime?
+  rejoiningDate DateTime?
+  absenceDays   Int
+  createdAt     DateTime @default(now())
+
+  @@index([employeeId, rejoiningDate])
+  @@map("employee_absence_history")
 }
 
 /// Fixed V1.0 shift schedule (not user-configurable per the spec):
@@ -116,4 +183,37 @@ model ShiftAllocationEmployee {
 
   @@unique([shiftAllocationId, employeeId])
   @@map("shift_allocation_employees")
+}
+
+model EmployeeRequest {
+  id                String                @id @default(cuid())
+  employeeId        String
+  name              String
+  fatherName        String?
+  dateOfBirth       DateTime
+  experienceYrs     Decimal               @db.Decimal(4, 1)
+  designation       String
+  department        String
+  skill             String
+  dateOfJoining     DateTime
+  pmeDate           DateTime?
+  pmeExpiry         DateTime?
+  vtcDate           DateTime?
+  vtcExpiry         DateTime?
+  medicalConditions String?
+  remark            String?
+  relay             Relay
+  status            EmployeeRequestStatus @default(PENDING)
+
+  requestedById String
+  requestedBy   User   @relation("RequestedBy", fields: [requestedById], references: [id])
+
+  reviewedById String?
+  reviewedBy   User?  @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  reviewComment String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("employee_requests")
 }

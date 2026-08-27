@@ -5,8 +5,13 @@ import {
   createEmployeeRequest,
   updateEmployeeRequest,
   deactivateEmployeeRequest,
+  previewEmployeeImportRequest,
+  importEmployeeMasterRequest,
 } from "@/services/employee.service";
-import type { EmployeeFormValues, EmployeeListParams } from "@/types/employee";
+import type {
+  EmployeeFormValues,
+  EmployeeListParams,
+} from "@/types/employee";
 
 const EMPLOYEES_QUERY_KEY = "employees" as const;
 
@@ -48,6 +53,22 @@ export function useDeactivateEmployee() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deactivateEmployeeRequest(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [EMPLOYEES_QUERY_KEY] });
+    },
+  });
+}
+
+export function usePreviewEmployeeImport() {
+  return useMutation({
+    mutationFn: (formData: FormData) => previewEmployeeImportRequest(formData),
+  });
+}
+
+export function useImportEmployeeMaster() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (formData: FormData) => importEmployeeMasterRequest(formData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [EMPLOYEES_QUERY_KEY] });
     },

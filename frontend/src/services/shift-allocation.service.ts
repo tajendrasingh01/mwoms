@@ -25,3 +25,7 @@ export async function saveShiftAllocationRequest(
   );
   return data.data;
 }
+
+export async function deleteShiftAllocationRequest(id: string): Promise<void> {
+  await apiClient.delete(`/shift-allocations/${id}`);
+}
