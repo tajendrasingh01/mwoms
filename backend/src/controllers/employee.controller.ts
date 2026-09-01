@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import type { Prisma, Relay } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import {
@@ -66,16 +66,6 @@ function getCertificationDates(data: {
   return { pmeExpiry, vtcDate, vtcExpiry, absenceDays };
 }
 
-function applyRelayAccessFilter(
-  user: { role: string; relay?: Relay } | undefined,
-  where: Prisma.EmployeeWhereInput,
-): Prisma.EmployeeWhereInput {
-  if (user?.role === "SHIFT_INCHARGE" && user?.relay) {
-    return { ...where, relay: user.relay };
-  }
-  return where;
-}
-
 /**
  * Express 5's route param types allow `string | string[]` (to support
  * wildcard/regex routes). Our routes never produce array params, so
@@ -125,17 +115,14 @@ export async function listEmployees(req: Request, res: Response) {
     ...(vtcStatus ? buildExpiryFilter(vtcStatus, "vtcExpiry") : {}),
   };
 
-  const user = getSessionUser(req);
-  const allowedWhere = applyRelayAccessFilter(user, where);
-
   const [employees, total] = await Promise.all([
     prisma.employee.findMany({
-      where: allowedWhere,
+      where,
       orderBy: { name: "asc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
-    prisma.employee.count({ where: allowedWhere }),
+    prisma.employee.count({ where }),
   ]);
 
   return res.json({
