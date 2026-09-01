@@ -14,7 +14,14 @@ const envSchema = z.object({
   // opposite: sameSite "lax" and secure false, since "none" cookies
   // are rejected entirely over plain HTTP. Defaults below assume
   // Codespaces/HTTPS; override in .env for local-only development.
-  SESSION_COOKIE_SECURE: z.coerce.boolean().default(true),
+  SESSION_COOKIE_SECURE: z.preprocess((value) => {
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === "false") return false;
+      if (normalized === "true") return true;
+    }
+    return value;
+  }, z.boolean()).default(true),
   SESSION_COOKIE_SAMESITE: z.enum(["lax", "strict", "none"]).default("none"),
   ONEDRIVE_CLIENT_ID: z.string().optional(),
   ONEDRIVE_TENANT_ID: z.string().default("consumers"),

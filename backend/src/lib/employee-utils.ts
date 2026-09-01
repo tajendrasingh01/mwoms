@@ -34,7 +34,9 @@ function addMonths(date: Date, months: number): Date {
 }
 
 export function calculatePmeDueDate(dateOfBirth: Date, pmeDate: Date): Date {
-  return addYears(pmeDate, calculateAgeAt(dateOfBirth, pmeDate) <= 45 ? 5 : 3);
+  const ageAtPme = calculateAgeAt(dateOfBirth, pmeDate);
+  const frequencyYears = ageAtPme <= 50 ? 3 : 1;
+  return addYears(pmeDate, frequencyYears);
 }
 
 export function calculateVtcDueDate(vtcDate: Date, absenceDays = 0, rejoiningDate?: Date | null): Date {
