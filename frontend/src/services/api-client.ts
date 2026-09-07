@@ -4,7 +4,7 @@ import axios from "axios";
  * Base URL for the MWOMS backend (Node.js/Express + Prisma).
  * Set VITE_API_BASE_URL in .env / .env.local — see .env.example.
  */
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,

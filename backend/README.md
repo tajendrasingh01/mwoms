@@ -111,13 +111,12 @@ npx prisma migrate dev --name add_employee_master
 npm run prisma:seed   # safe to re-run — uses upsert, won't duplicate data
 ```
 
-## Before deploying to Render
+## Deploying to Render
 
-The session store currently defaults to Express's in-memory store, which
-is fine for local development only — it loses all sessions on restart
-and won't work across multiple instances. `connect-pg-simple` is already
-installed; before deploying, wire it up in `src/index.ts` pointed at the
-same Neon database so sessions persist properly.
+The repository root contains a Render Blueprint that provisions PostgreSQL,
+uses the PostgreSQL-backed session store, builds the frontend and backend, and
+runs the seed command before startup. Set `SEED_ADMIN_EMPLOYEE_ID` and
+`SEED_ADMIN_PASSWORD` as private Render environment variables during setup.
 
 ## Next milestones (not in this delivery)
 
