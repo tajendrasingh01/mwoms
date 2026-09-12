@@ -95,6 +95,8 @@ export interface EmployeeListParams {
   designation?: string;
   department?: string;
   relay?: "RELAY_A" | "RELAY_B" | "RELAY_C";
+  pmeStatus?: ExpiryStatus;
+  vtcStatus?: ExpiryStatus;
   isActive?: boolean;
   page?: number;
   pageSize?: number;

@@ -14,7 +14,9 @@ export async function fetchShiftOverviewRequest(date: string): Promise<ShiftOver
   return data.data;
 }
 
-export async function fetchComplianceEmployeesRequest(type: ComplianceType): Promise<Employee[]> {
-  const { data } = await apiClient.get<{ data: Employee[] }>(`/dashboard/compliance/${type}`);
+export async function fetchComplianceEmployeesRequest(type: ComplianceType, search?: string): Promise<Employee[]> {
+  const { data } = await apiClient.get<{ data: Employee[] }>(`/dashboard/compliance/${type}`, {
+    params: search ? { search } : undefined,
+  });
   return data.data;
 }

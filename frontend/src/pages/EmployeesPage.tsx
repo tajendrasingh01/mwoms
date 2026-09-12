@@ -42,6 +42,8 @@ export function EmployeesPage() {
   const [designation, setDesignation] = useState("");
   const [department, setDepartment] = useState("");
   const [relay, setRelay] = useState<"" | "RELAY_A" | "RELAY_B" | "RELAY_C">("");
+  const [pmeStatus, setPmeStatus] = useState<"" | "EXPIRED" | "DUE_SOON" | "VALID" | "NOT_SET">("");
+  const [vtcStatus, setVtcStatus] = useState<"" | "EXPIRED" | "DUE_SOON" | "VALID" | "NOT_SET">("");
   const [activeFilter, setActiveFilter] = useState<"" | "true" | "false">("");
   const [isExporting, setIsExporting] = useState(false);
 
@@ -56,6 +58,8 @@ export function EmployeesPage() {
     designation: designation || undefined,
     department: department || undefined,
     relay: relay || undefined,
+    pmeStatus: pmeStatus || undefined,
+    vtcStatus: vtcStatus || undefined,
     isActive: activeFilter ? activeFilter === "true" : undefined,
     page,
     pageSize: 25,
@@ -87,6 +91,8 @@ export function EmployeesPage() {
         designation: designation || undefined,
         department: department || undefined,
         relay: relay || undefined,
+        pmeStatus: pmeStatus || undefined,
+        vtcStatus: vtcStatus || undefined,
         isActive: activeFilter ? activeFilter === "true" : undefined,
       });
 
@@ -167,7 +173,7 @@ export function EmployeesPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-2 rounded-md border border-border bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-2 rounded-md border border-border bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-7">
         <select className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={employeeType} onChange={(e) => { setEmployeeType(e.target.value as typeof employeeType); setPage(1); }}>
           <option value="">All groups</option>
           <option value="DAILY_RATED">DR - Daily Rated</option>
@@ -181,6 +187,20 @@ export function EmployeesPage() {
           <option value="RELAY_A">Relay A</option>
           <option value="RELAY_B">Relay B</option>
           <option value="RELAY_C">Relay C</option>
+        </select>
+        <select className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={pmeStatus} onChange={(e) => { setPmeStatus(e.target.value as typeof pmeStatus); setPage(1); }}>
+          <option value="">All PME statuses</option>
+          <option value="EXPIRED">PME expired</option>
+          <option value="DUE_SOON">PME near expiry</option>
+          <option value="VALID">PME valid</option>
+          <option value="NOT_SET">PME not set</option>
+        </select>
+        <select className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={vtcStatus} onChange={(e) => { setVtcStatus(e.target.value as typeof vtcStatus); setPage(1); }}>
+          <option value="">All VTC statuses</option>
+          <option value="EXPIRED">VTC expired</option>
+          <option value="DUE_SOON">VTC near expiry</option>
+          <option value="VALID">VTC valid</option>
+          <option value="NOT_SET">VTC not set</option>
         </select>
         <select className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={activeFilter} onChange={(e) => { setActiveFilter(e.target.value as typeof activeFilter); setPage(1); }}>
           <option value="">All statuses</option>

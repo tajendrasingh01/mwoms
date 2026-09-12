@@ -29,6 +29,7 @@ export function useCreateEmployee() {
     mutationFn: (payload: EmployeeFormValues) => createEmployeeRequest(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [EMPLOYEES_QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
 }
@@ -45,6 +46,7 @@ export function useUpdateEmployee() {
     }) => updateEmployeeRequest(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [EMPLOYEES_QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
 }

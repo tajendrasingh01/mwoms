@@ -101,11 +101,20 @@ export async function getComplianceEmployees(req: Request, res: Response) {
   const now = new Date();
   const dueSoon = new Date(now);
   dueSoon.setDate(dueSoon.getDate() + 30);
+  const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
   const expiryField = type === "pme" ? "pmeExpiry" : "vtcExpiry";
   const employees = await prisma.employee.findMany({
     where: {
       isActive: true,
       [expiryField]: { lte: dueSoon },
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: "insensitive" } },
+              { employeeId: { contains: search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
     },
     orderBy: [{ [expiryField]: "asc" }, { name: "asc" }],
   });
