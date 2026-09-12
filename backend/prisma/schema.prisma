@@ -55,6 +55,15 @@ model User {
   @@map("users")
 }
 
+model UserSession {
+  sid    String   @id @db.VarChar(255)
+  sess   Json
+  expire DateTime @db.Timestamp(6)
+
+  @@index([expire], map: "IDX_session_expire")
+  @@map("user_sessions")
+}
+
 /// Employee Master record — the tracked roster of mine workers.
 /// Age is deliberately NOT stored (it would go stale); it's computed
 /// from dateOfBirth at read time in the API layer instead.
