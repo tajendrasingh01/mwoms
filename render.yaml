@@ -3,7 +3,7 @@ services:
     name: mwoms
     runtime: node
     plan: free
-    buildCommand: npm ci --include=dev --prefix frontend && npm ci --include=dev --prefix backend && npm run build --prefix frontend && npm run prisma:generate --prefix backend && npm run prisma:push --prefix backend && npm run build --prefix backend
+    buildCommand: NPM_CONFIG_PRODUCTION=false npm ci --include=dev --prefix frontend && NPM_CONFIG_PRODUCTION=false npm ci --include=dev --prefix backend && npm run build --prefix frontend && npm run prisma:generate --prefix backend && npm run prisma:push --prefix backend && npm run build --prefix backend
     preDeployCommand: npm run prisma:seed --prefix backend
     startCommand: npm run start --prefix backend
     healthCheckPath: /api/health
