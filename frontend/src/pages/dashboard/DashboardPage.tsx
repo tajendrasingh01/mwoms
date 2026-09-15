@@ -90,10 +90,13 @@ function CompliancePersonnelDialog({
   const canEdit = user?.role === "ADMIN";
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<"" | "DUE_SOON" | "EXPIRED">("");
+  const [employmentStatus, setEmploymentStatus] = useState<"ACTIVE" | "TRANSFERRED" | "NOT_ENROLLED">("ACTIVE");
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const debouncedSetSearch = useDebouncedCallback((value: string) => setSearch(value), 300);
-  const { data: employees, isLoading } = useComplianceEmployees(type, search);
+  const { data: employees, isLoading } = useComplianceEmployees(type, search, status || undefined, employmentStatus);
   const label = type === "pme" ? "PME Due Personnel" : "VTC Due Personnel";
+  const statusLabel = type === "pme" ? "PME status" : "VTC status";
   return (
     <Dialog open={!!type} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-6xl">
@@ -101,7 +104,28 @@ function CompliancePersonnelDialog({
           <DialogTitle>{label}</DialogTitle>
           <DialogDescription>Active employees due within 30 days or already expired, with their complete master details.</DialogDescription>
         </DialogHeader>
-        <div className="relative mb-3 max-w-sm">
+        <div className="mb-3 flex flex-wrap gap-2">
+          <select
+            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={status}
+            onChange={(event) => setStatus(event.target.value as typeof status)}
+            aria-label={statusLabel}
+          >
+            <option value="">All due statuses</option>
+            <option value="DUE_SOON">Due soon</option>
+            <option value="EXPIRED">Expired</option>
+          </select>
+          <select
+            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={employmentStatus}
+            onChange={(event) => setEmploymentStatus(event.target.value as typeof employmentStatus)}
+            aria-label="Employment status"
+          >
+            <option value="ACTIVE">Active</option>
+            <option value="TRANSFERRED">Transferred</option>
+            <option value="NOT_ENROLLED">Not Enrolled</option>
+          </select>
+          <div className="relative max-w-sm flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search by name, NEIS or EIS number..."
@@ -112,6 +136,7 @@ function CompliancePersonnelDialog({
               debouncedSetSearch(event.target.value);
             }}
           />
+          </div>
         </div>
         {isLoading ? (
           <div className="flex justify-center py-12 text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>
@@ -120,7 +145,7 @@ function CompliancePersonnelDialog({
             <table className="w-full text-left text-xs">
               <thead className="sticky top-0 bg-muted text-muted-foreground">
                 <tr>
-                  <th className="p-2">Employee</th><th className="p-2">Type</th><th className="p-2">Designation / Grade</th><th className="p-2">Department / Skill</th><th className="p-2">DOB</th><th className="p-2">DOA</th><th className="p-2">PME</th><th className="p-2">VTC</th><th className="p-2">Relay</th><th className="p-2">Medical / Remarks</th>{canEdit && <th className="p-2">Actions</th>}
+                  <th className="p-2">Employee</th><th className="p-2">Type</th><th className="p-2">Employment status</th><th className="p-2">Designation / Grade</th><th className="p-2">Department / Skill</th><th className="p-2">DOB</th><th className="p-2">DOA</th><th className="p-2">PME</th><th className="p-2">VTC</th><th className="p-2">Relay</th><th className="p-2">Medical / Remarks</th>{canEdit && <th className="p-2">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -141,7 +166,7 @@ function CompliancePersonnelDialog({
 
 function ComplianceRow({ employee, canEdit, onEdit }: { employee: Employee; canEdit: boolean; onEdit: (employee: Employee) => void }) {
   const format = (value: string | null) => value ? new Date(value).toLocaleDateString() : "—";
-  return <tr className="border-t border-border align-top"><td className="p-2"><div className="font-medium text-foreground">{employee.name}</div><div className="text-muted-foreground">{employee.employeeId}</div><div className="text-muted-foreground">Father: {employee.fatherName ?? "—"}</div></td><td className="p-2">{employee.employeeType === "DAILY_RATED" ? "DR" : employee.employeeType === "MONTHLY_RATED" ? "MR" : employee.employeeType === "EXECUTIVE" ? "Executive" : "Staff"}</td><td className="p-2">{employee.designation}<br /><span className="text-muted-foreground">Grade: {employee.grade ?? "—"}</span></td><td className="p-2">{employee.department}<br /><span className="text-muted-foreground">Skill: {employee.skill}</span></td><td className="p-2">{format(employee.dateOfBirth)}</td><td className="p-2">{format(employee.dateOfJoining)}</td><td className="p-2"><ExpiryStatusBadge status={employee.pmeStatus} /><br />Date: {format(employee.pmeDate)}<br />Due: {format(employee.pmeExpiry)}<br /><span className="font-medium">Left: {employee.pmeDaysLeft ?? "—"} days</span></td><td className="p-2">{employee.employeeType === "MONTHLY_RATED" ? "Not required" : <><ExpiryStatusBadge status={employee.vtcStatus} /><br />Due: {format(employee.vtcExpiry)}<br />Left: {employee.vtcDaysLeft ?? "—"} days</>}</td><td className="p-2">{employee.relay.replace("RELAY_", "Relay ")}</td><td className="p-2">Medical: {employee.medicalConditions ?? "—"}<br />Remark: {employee.remark ?? "—"}</td>{canEdit && <td className="p-2"><Button variant="ghost" size="icon" onClick={() => onEdit(employee)} aria-label={`Edit ${employee.name}`}><Pencil className="size-4" /></Button></td>}</tr>;
+  return <tr className="border-t border-border align-top"><td className="p-2"><div className="font-medium text-foreground">{employee.name}</div><div className="text-muted-foreground">{employee.employeeId}</div><div className="text-muted-foreground">Father: {employee.fatherName ?? "—"}</div></td><td className="p-2">{employee.employeeType === "DAILY_RATED" ? "DR" : employee.employeeType === "MONTHLY_RATED" ? "MR" : employee.employeeType === "EXECUTIVE" ? "Executive" : "Staff"}</td><td className="p-2">{employee.employmentStatus === "TRANSFERRED" ? "Transferred" : employee.employmentStatus === "NOT_ENROLLED" ? "Not Enrolled" : "Active"}</td><td className="p-2">{employee.designation}<br /><span className="text-muted-foreground">Grade: {employee.grade ?? "—"}</span></td><td className="p-2">{employee.department}<br /><span className="text-muted-foreground">Skill: {employee.skill}</span></td><td className="p-2">{format(employee.dateOfBirth)}</td><td className="p-2">{format(employee.dateOfJoining)}</td><td className="p-2"><ExpiryStatusBadge status={employee.pmeStatus} /><br />Date: {format(employee.pmeDate)}<br />Due: {format(employee.pmeExpiry)}<br /><span className="font-medium">Left: {employee.pmeDaysLeft ?? "—"} days</span></td><td className="p-2">{employee.employeeType === "MONTHLY_RATED" ? "Not required" : <><ExpiryStatusBadge status={employee.vtcStatus} /><br />Due: {format(employee.vtcExpiry)}<br />Left: {employee.vtcDaysLeft ?? "—"} days</>}</td><td className="p-2">{employee.relay.replace("RELAY_", "Relay ")}</td><td className="p-2">Medical: {employee.medicalConditions ?? "—"}<br />Remark: {employee.remark ?? "—"}</td>{canEdit && <td className="p-2"><Button variant="ghost" size="icon" onClick={() => onEdit(employee)} aria-label={`Edit ${employee.name}`}><Pencil className="size-4" /></Button></td>}</tr>;
 }
 
 function ComplianceChart({

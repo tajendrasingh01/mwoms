@@ -18,10 +18,15 @@ export function useShiftOverview(date: string) {
   });
 }
 
-export function useComplianceEmployees(type: ComplianceType | null, search: string) {
+export function useComplianceEmployees(
+  type: ComplianceType | null,
+  search: string,
+  status?: "DUE_SOON" | "EXPIRED",
+  employmentStatus?: "ACTIVE" | "TRANSFERRED" | "NOT_ENROLLED",
+) {
   return useQuery({
-    queryKey: ["dashboard", "compliance", type, search],
-    queryFn: () => fetchComplianceEmployeesRequest(type!, search),
+    queryKey: ["dashboard", "compliance", type, search, status, employmentStatus],
+    queryFn: () => fetchComplianceEmployeesRequest(type!, search, status, employmentStatus),
     enabled: !!type,
   });
 }

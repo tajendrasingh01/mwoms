@@ -21,7 +21,7 @@ import { EmployeeImportDialog } from "@/components/common/EmployeeImportDialog";
 import { useEmployees, useDeactivateEmployee } from "@/hooks/use-employees";
 import { listAllEmployeesRequest } from "@/services/employee.service";
 import { useAuth } from "@/store/auth-store";
-import type { Employee } from "@/types/employee";
+import type { Employee, EmploymentStatus } from "@/types/employee";
 
 function displayDate(value: string | null): string {
   return value ? new Date(value).toLocaleDateString() : "—";
@@ -45,6 +45,7 @@ export function EmployeesPage() {
   const [pmeStatus, setPmeStatus] = useState<"" | "EXPIRED" | "DUE_SOON" | "VALID" | "NOT_SET">("");
   const [vtcStatus, setVtcStatus] = useState<"" | "EXPIRED" | "DUE_SOON" | "VALID" | "NOT_SET">("");
   const [activeFilter, setActiveFilter] = useState<"" | "true" | "false">("");
+  const [employmentStatus, setEmploymentStatus] = useState<"" | EmploymentStatus>("");
   const [isExporting, setIsExporting] = useState(false);
 
   const debouncedSetSearch = useDebouncedCallback((value: string) => {
@@ -61,6 +62,7 @@ export function EmployeesPage() {
     pmeStatus: pmeStatus || undefined,
     vtcStatus: vtcStatus || undefined,
     isActive: activeFilter ? activeFilter === "true" : undefined,
+    employmentStatus: employmentStatus || undefined,
     page,
     pageSize: 25,
   });
@@ -94,6 +96,7 @@ export function EmployeesPage() {
         pmeStatus: pmeStatus || undefined,
         vtcStatus: vtcStatus || undefined,
         isActive: activeFilter ? activeFilter === "true" : undefined,
+        employmentStatus: employmentStatus || undefined,
       });
 
       const rows = employees.map((employee) => ({
@@ -120,6 +123,7 @@ export function EmployeesPage() {
         "VTC Status": employee.vtcStatus,
         "Medical Conditions": employee.medicalConditions ?? "",
         Remark: employee.remark ?? "",
+        "Employment Status": employee.employmentStatus,
         Status: employee.isActive ? "Active" : "Inactive",
       }));
       const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -173,7 +177,7 @@ export function EmployeesPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-2 rounded-md border border-border bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-7">
+      <div className="grid grid-cols-1 gap-2 rounded-md border border-border bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-8">
         <select className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={employeeType} onChange={(e) => { setEmployeeType(e.target.value as typeof employeeType); setPage(1); }}>
           <option value="">All groups</option>
           <option value="DAILY_RATED">DR - Daily Rated</option>
@@ -207,6 +211,12 @@ export function EmployeesPage() {
           <option value="">All statuses</option>
           <option value="true">Active only</option>
           <option value="false">Inactive only</option>
+        </select>
+        <select className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={employmentStatus} onChange={(e) => { setEmploymentStatus(e.target.value as typeof employmentStatus); setPage(1); }}>
+          <option value="">All employment statuses</option>
+          <option value="ACTIVE">Active</option>
+          <option value="TRANSFERRED">Transferred</option>
+          <option value="NOT_ENROLLED">Not Enrolled</option>
         </select>
       </div>
 
@@ -270,8 +280,8 @@ export function EmployeesPage() {
                       </div>}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={employee.isActive ? "success" : "secondary"}>
-                        {employee.isActive ? "Active" : "Inactive"}
+                      <Badge variant={employee.employmentStatus === "ACTIVE" && employee.isActive ? "success" : "secondary"}>
+                        {employee.employmentStatus === "TRANSFERRED" ? "Transferred" : employee.employmentStatus === "NOT_ENROLLED" ? "Not Enrolled" : employee.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </TableCell>
                     {canEdit && (

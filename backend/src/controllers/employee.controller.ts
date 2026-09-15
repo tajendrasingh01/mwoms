@@ -94,7 +94,7 @@ export async function listEmployees(req: Request, res: Response) {
     });
   }
 
-  const { search, department, relay, designation, employeeType, pmeStatus, vtcStatus, isActive, page, pageSize } =
+  const { search, department, relay, designation, employeeType, employmentStatus, pmeStatus, vtcStatus, isActive, page, pageSize } =
     parseResult.data;
 
   const where: Prisma.EmployeeWhereInput = {
@@ -102,6 +102,7 @@ export async function listEmployees(req: Request, res: Response) {
     ...(relay ? { relay } : {}),
     ...(designation ? { designation } : {}),
     ...(employeeType ? { employeeType } : {}),
+    ...(employmentStatus ? { employmentStatus } : {}),
     ...(isActive !== undefined ? { isActive } : {}),
     ...(search
       ? {

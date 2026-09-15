@@ -116,6 +116,7 @@ export function serializeEmployee(employee: Employee) {
     remark: employee.remark ?? null,
     relay: employee.relay,
     employeeType: employee.employeeType,
+    employmentStatus: employee.employmentStatus,
     isActive: employee.isActive,
     createdAt: employee.createdAt.toISOString(),
     updatedAt: employee.updatedAt.toISOString(),

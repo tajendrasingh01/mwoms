@@ -26,6 +26,12 @@ enum EmployeeType {
   EXECUTIVE
 }
 
+enum EmploymentStatus {
+  ACTIVE
+  TRANSFERRED
+  NOT_ENROLLED
+}
+
 enum EmployeeRequestStatus {
   PENDING
   APPROVED
@@ -92,6 +98,7 @@ model Employee {
   remark            String?
   relay             Relay    @default(RELAY_A)
   employeeType      EmployeeType @default(DAILY_RATED)
+  employmentStatus  EmploymentStatus @default(ACTIVE)
   isActive          Boolean  @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

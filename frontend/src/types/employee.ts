@@ -1,4 +1,5 @@
 export type ExpiryStatus = "EXPIRED" | "DUE_SOON" | "VALID" | "NOT_SET";
+export type EmploymentStatus = "ACTIVE" | "TRANSFERRED" | "NOT_ENROLLED";
 
 export interface Employee {
   id: string;
@@ -29,6 +30,7 @@ export interface Employee {
   remark: string | null;
   relay: "RELAY_A" | "RELAY_B" | "RELAY_C";
   employeeType: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
+  employmentStatus: EmploymentStatus;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -52,6 +54,7 @@ export interface EmployeeFormValues {
   relay?: "Relay A" | "Relay B" | "Relay C" | null;
   isActive?: boolean;
   employeeType: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
+  employmentStatus?: EmploymentStatus;
 }
 
 export interface EmployeeImportPreviewError {
@@ -97,6 +100,7 @@ export interface EmployeeListParams {
   relay?: "RELAY_A" | "RELAY_B" | "RELAY_C";
   pmeStatus?: ExpiryStatus;
   vtcStatus?: ExpiryStatus;
+  employmentStatus?: EmploymentStatus;
   isActive?: boolean;
   page?: number;
   pageSize?: number;

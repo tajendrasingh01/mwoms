@@ -56,7 +56,7 @@ export async function getDashboardSummary(_req: Request, res: Response) {
   const [totalEmployees, employees, allocatedCount] = await Promise.all([
     prisma.employee.count({ where: { isActive: true } }),
     prisma.employee.findMany({
-      where: { isActive: true },
+      where: { isActive: true, employmentStatus: "ACTIVE" },
       select: { dateOfBirth: true, pmeExpiry: true, vtcExpiry: true },
     }),
     current
@@ -104,11 +104,20 @@ export async function getComplianceEmployees(req: Request, res: Response) {
   const dueSoon = new Date(now);
   dueSoon.setDate(dueSoon.getDate() + 30);
   const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+  const statusParam = typeof req.query.status === "string" ? req.query.status : undefined;
+  const employmentStatus = typeof req.query.employmentStatus === "string" ? req.query.employmentStatus : undefined;
   const expiryField = type === "pme" ? "pmeExpiry" : "vtcExpiry";
+  const expiryStatus = statusParam === "DUE_SOON" || statusParam === "EXPIRED" ? statusParam : undefined;
+  const dueSoonFilter = expiryStatus === "DUE_SOON"
+    ? { gt: now, lte: dueSoon }
+    : expiryStatus === "EXPIRED"
+      ? { lt: now }
+      : { lte: dueSoon };
   const employees = await prisma.employee.findMany({
     where: {
       isActive: true,
-      [expiryField]: { lte: dueSoon },
+      employmentStatus: employmentStatus === "TRANSFERRED" || employmentStatus === "NOT_ENROLLED" ? employmentStatus : "ACTIVE",
+      [expiryField]: dueSoonFilter,
       ...(search
         ? {
             OR: [

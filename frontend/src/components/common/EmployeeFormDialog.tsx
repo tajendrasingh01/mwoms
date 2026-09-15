@@ -35,6 +35,7 @@ const employeeFormSchema = z.object({
   rejoiningDate: z.string().nullable().optional(),
   relay: z.enum(["Relay A", "Relay B", "Relay C"]).nullable().optional(),
   employeeType: z.enum(["DAILY_RATED", "MONTHLY_RATED", "STAFF", "EXECUTIVE"]),
+  employmentStatus: z.enum(["ACTIVE", "TRANSFERRED", "NOT_ENROLLED"]),
 }).superRefine((values, ctx) => {
   if (values.employeeType === "EXECUTIVE") {
     return;
@@ -135,6 +136,7 @@ export function EmployeeFormDialog({
         rejoiningDate: toDateInputValue(employee.rejoiningDate),
         relay: relayInternalToDisplay(employee.relay),
         employeeType: employee.employeeType,
+        employmentStatus: employee.employmentStatus,
       });
     } else {
       reset({
@@ -154,6 +156,7 @@ export function EmployeeFormDialog({
         rejoiningDate: "",
         relay: "Relay A",
         employeeType: initialEmployeeType,
+        employmentStatus: "ACTIVE",
       });
     }
   }, [open, employee, reset]);
@@ -210,6 +213,16 @@ export function EmployeeFormDialog({
                 <option value="DAILY_RATED">Daily Rated Worker</option>
                 <option value="STAFF">Staff</option>
                 <option value="EXECUTIVE">Executive</option>
+              </select>
+            </Field>
+            <Field label="Employment status" error={errors.employmentStatus?.message}>
+              <select
+                className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                {...register("employmentStatus")}
+              >
+                <option value="ACTIVE">Active</option>
+                <option value="TRANSFERRED">Transferred</option>
+                <option value="NOT_ENROLLED">Not Enrolled</option>
               </select>
             </Field>
             {!selectedEmployeeType || selectedEmployeeType !== "EXECUTIVE" ? (

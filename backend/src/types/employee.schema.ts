@@ -4,6 +4,7 @@ const dateString = z.coerce.date();
 const relayEnum = z.enum(["Relay A", "Relay B", "Relay C"]);
 const relayInternal = z.enum(["RELAY_A", "RELAY_B", "RELAY_C"]);
 const expiryStatusEnum = z.enum(["EXPIRED", "DUE_SOON", "VALID", "NOT_SET"]);
+const employmentStatusEnum = z.enum(["ACTIVE", "TRANSFERRED", "NOT_ENROLLED"]);
 
 const relayTransform = relayEnum.transform((value) => {
   switch (value) {
@@ -39,6 +40,7 @@ const standardEmployeeSchema = z.object({
   remark: z.string().trim().optional().nullable(),
   relay: relayTransform,
   employeeType: z.enum(["DAILY_RATED", "MONTHLY_RATED", "STAFF"]),
+  employmentStatus: employmentStatusEnum.default("ACTIVE"),
   isActive: z.boolean().default(true),
 });
 
@@ -65,6 +67,7 @@ const executiveEmployeeSchema = z.object({
   remark: z.string().trim().optional().nullable(),
   relay: relayTransform.default("RELAY_A"),
   employeeType: z.literal("EXECUTIVE"),
+  employmentStatus: employmentStatusEnum.default("ACTIVE"),
   isActive: z.boolean().default(true),
 });
 
@@ -93,6 +96,7 @@ export const updateEmployeeSchema = z.object({
   remark: z.string().trim().optional().nullable(),
   relay: relayTransform.optional(),
   employeeType: z.enum(["DAILY_RATED", "MONTHLY_RATED", "STAFF", "EXECUTIVE"]).optional(),
+  employmentStatus: employmentStatusEnum.optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -104,6 +108,7 @@ export const listEmployeesQuerySchema = z.object({
   department: z.string().trim().optional(),
   pmeStatus: expiryStatusEnum.optional(),
   vtcStatus: expiryStatusEnum.optional(),
+  employmentStatus: employmentStatusEnum.optional(),
   isActive: z
     .enum(["true", "false"])
     .transform((v) => v === "true")
