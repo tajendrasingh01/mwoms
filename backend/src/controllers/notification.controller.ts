@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import type { Employee } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-import { getExpiryStatus, getDaysUntil } from "@/lib/employee-utils";
+import { getDueStatusForEmployee, getDaysUntil, isRetired } from "@/lib/employee-utils";
 
 export interface ExpiryNotification {
   employeeId: string;
@@ -19,7 +19,9 @@ function buildNotifications(employees: Employee[]): ExpiryNotification[] {
   const notifications: ExpiryNotification[] = [];
 
   for (const employee of employees) {
-    const pmeStatus = getExpiryStatus(employee.pmeExpiry);
+    if (isRetired(employee.dateOfBirth)) continue;
+
+    const pmeStatus = getDueStatusForEmployee(employee.dateOfBirth, employee.pmeExpiry);
     if ((pmeStatus === "EXPIRED" || pmeStatus === "DUE_SOON") && employee.pmeExpiry) {
       notifications.push({
         employeeId: employee.employeeId,
@@ -33,7 +35,7 @@ function buildNotifications(employees: Employee[]): ExpiryNotification[] {
       });
     }
 
-    const vtcStatus = getExpiryStatus(employee.vtcExpiry);
+    const vtcStatus = getDueStatusForEmployee(employee.dateOfBirth, employee.vtcExpiry);
     if ((vtcStatus === "EXPIRED" || vtcStatus === "DUE_SOON") && employee.vtcExpiry) {
       notifications.push({
         employeeId: employee.employeeId,

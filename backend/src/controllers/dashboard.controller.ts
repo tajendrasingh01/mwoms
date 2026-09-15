@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 
 import { prisma } from "@/lib/prisma";
-import { getExpiryStatus } from "@/lib/employee-utils";
+import { getDueStatusForEmployee, isRetired } from "@/lib/employee-utils";
 import { serializeShiftAllocation } from "@/lib/shift-allocation-utils";
 import { serializeEmployee } from "@/lib/employee-utils";
 import { SHIFT_TYPES, SHIFT_SCHEDULE, type ShiftTypeValue } from "@/constants/shift-schedule";
@@ -57,7 +57,7 @@ export async function getDashboardSummary(_req: Request, res: Response) {
     prisma.employee.count({ where: { isActive: true } }),
     prisma.employee.findMany({
       where: { isActive: true },
-      select: { pmeExpiry: true, vtcExpiry: true },
+      select: { dateOfBirth: true, pmeExpiry: true, vtcExpiry: true },
     }),
     current
       ? prisma.shiftAllocationEmployee.count({
@@ -69,11 +69,13 @@ export async function getDashboardSummary(_req: Request, res: Response) {
   ]);
 
   const pmeDue = employees.filter((e) => {
-    const s = getExpiryStatus(e.pmeExpiry);
+    if (isRetired(e.dateOfBirth)) return false;
+    const s = getDueStatusForEmployee(e.dateOfBirth, e.pmeExpiry);
     return s === "DUE_SOON" || s === "EXPIRED";
   }).length;
   const vtcDue = employees.filter((e) => {
-    const s = getExpiryStatus(e.vtcExpiry);
+    if (isRetired(e.dateOfBirth)) return false;
+    const s = getDueStatusForEmployee(e.dateOfBirth, e.vtcExpiry);
     return s === "DUE_SOON" || s === "EXPIRED";
   }).length;
 
@@ -119,7 +121,9 @@ export async function getComplianceEmployees(req: Request, res: Response) {
     orderBy: [{ [expiryField]: "asc" }, { name: "asc" }],
   });
 
-  return res.json({ data: employees.map(serializeEmployee) });
+  const filtered = employees.filter((employee) => !isRetired(employee.dateOfBirth));
+
+  return res.json({ data: filtered.map(serializeEmployee) });
 }
 
 /**

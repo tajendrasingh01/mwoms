@@ -21,6 +21,10 @@ export function calculateAgeAt(dateOfBirth: Date, onDate: Date): number {
   return age;
 }
 
+export function isRetired(dateOfBirth: Date): boolean {
+  return calculateAge(dateOfBirth) >= 60;
+}
+
 function addYears(date: Date, years: number): Date {
   const result = new Date(date);
   result.setFullYear(result.getFullYear() + years);
@@ -59,6 +63,13 @@ export function getExpiryStatus(expiry: Date | null): ExpiryStatus {
   return "VALID";
 }
 
+export function getDueStatusForEmployee(dateOfBirth: Date | null | undefined, expiry: Date | null): ExpiryStatus {
+  if (!dateOfBirth || isRetired(dateOfBirth)) {
+    return expiry ? "VALID" : "NOT_SET";
+  }
+  return getExpiryStatus(expiry);
+}
+
 /** Whole days from now until `date` (negative if already past). */
 export function getDaysUntil(date: Date): number {
   const now = new Date();
@@ -92,7 +103,7 @@ export function serializeEmployee(employee: Employee) {
     pmeDate: employee.pmeDate?.toISOString() ?? null,
     pmeExpiry: employee.pmeExpiry?.toISOString() ?? null,
     pmeDaysLeft: getDaysLeft(employee.pmeExpiry),
-    pmeStatus: getExpiryStatus(employee.pmeExpiry),
+    pmeStatus: getDueStatusForEmployee(employee.dateOfBirth, employee.pmeExpiry),
     vtcDate: employee.vtcDate?.toISOString() ?? null,
     vtcExpiry: employee.vtcExpiry?.toISOString() ?? null,
     vtcDaysLeft: getDaysLeft(employee.vtcExpiry),
@@ -100,7 +111,7 @@ export function serializeEmployee(employee: Employee) {
     leaveEnd: employee.leaveEnd?.toISOString() ?? null,
     rejoiningDate: employee.rejoiningDate?.toISOString() ?? null,
     absenceDays: employee.absenceDays,
-    vtcStatus: getExpiryStatus(employee.vtcExpiry),
+    vtcStatus: getDueStatusForEmployee(employee.dateOfBirth, employee.vtcExpiry),
     medicalConditions: employee.medicalConditions ?? null,
     remark: employee.remark ?? null,
     relay: employee.relay,
