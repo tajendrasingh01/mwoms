@@ -58,7 +58,11 @@ export interface DashboardSummary {
   totalEmployees: number;
   allocatedEmployees: number;
   pmeDue: number;
+  pmeDueSoon: number;
+  pmeExpired: number;
   vtcDue: number;
+  vtcDueSoon: number;
+  vtcExpired: number;
   vacantPositions: number;
 }
 

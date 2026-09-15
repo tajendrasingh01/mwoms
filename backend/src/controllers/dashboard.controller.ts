@@ -68,15 +68,23 @@ export async function getDashboardSummary(_req: Request, res: Response) {
       : Promise.resolve(0),
   ]);
 
-  const pmeDue = employees.filter((e) => {
+  const pmeDueSoon = employees.filter((e) => {
     if (isRetired(e.dateOfBirth)) return false;
     const s = getDueStatusForEmployee(e.dateOfBirth, e.pmeExpiry);
-    return s === "DUE_SOON" || s === "EXPIRED";
+    return s === "DUE_SOON";
   }).length;
-  const vtcDue = employees.filter((e) => {
+  const pmeExpired = employees.filter((e) => {
+    if (isRetired(e.dateOfBirth)) return false;
+    return getDueStatusForEmployee(e.dateOfBirth, e.pmeExpiry) === "EXPIRED";
+  }).length;
+  const vtcDueSoon = employees.filter((e) => {
     if (isRetired(e.dateOfBirth)) return false;
     const s = getDueStatusForEmployee(e.dateOfBirth, e.vtcExpiry);
-    return s === "DUE_SOON" || s === "EXPIRED";
+    return s === "DUE_SOON";
+  }).length;
+  const vtcExpired = employees.filter((e) => {
+    if (isRetired(e.dateOfBirth)) return false;
+    return getDueStatusForEmployee(e.dateOfBirth, e.vtcExpiry) === "EXPIRED";
   }).length;
 
   return res.json({
@@ -86,8 +94,12 @@ export async function getDashboardSummary(_req: Request, res: Response) {
         : null,
       totalEmployees,
       allocatedEmployees: allocatedCount,
-      pmeDue,
-      vtcDue,
+      pmeDue: pmeDueSoon + pmeExpired,
+      pmeDueSoon,
+      pmeExpired,
+      vtcDue: vtcDueSoon + vtcExpired,
+      vtcDueSoon,
+      vtcExpired,
       vacantPositions: 0, // see note above
     },
   });

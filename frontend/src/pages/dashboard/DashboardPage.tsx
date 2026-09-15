@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Clock, Users, CalendarCheck, HeartPulse, GraduationCap, UserX, Loader2, Pencil, Search } from "lucide-react";
 
 import { KpiCard } from "@/components/common/KpiCard";
@@ -21,10 +21,13 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+type ComplianceStatus = "DUE_SOON" | "EXPIRED";
+type ComplianceSelection = { type: ComplianceType; status: ComplianceStatus } | null;
+
 export function DashboardPage() {
   const { user } = useAuth();
   const { data: summary, isLoading: isSummaryLoading } = useDashboardSummary();
-  const [complianceType, setComplianceType] = useState<ComplianceType | null>(null);
+  const [complianceSelection, setComplianceSelection] = useState<ComplianceSelection>(null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -46,20 +49,36 @@ export function DashboardPage() {
           tone="success"
         />
         <KpiCard
-          label="PME Due"
-          value={isSummaryLoading ? "…" : (summary?.pmeDue ?? 0)}
+          label="PME Due Soon"
+          value={isSummaryLoading ? "…" : (summary?.pmeDueSoon ?? 0)}
           icon={HeartPulse}
           tone="warning"
-          hint="Periodical Medical Examination — due soon or expired"
-          onClick={() => setComplianceType("pme")}
+          hint="Periodical Medical Examination — due within 30 days"
+          onClick={() => setComplianceSelection({ type: "pme", status: "DUE_SOON" })}
         />
         <KpiCard
-          label="VTC Due"
-          value={isSummaryLoading ? "…" : (summary?.vtcDue ?? 0)}
+          label="PME Expired"
+          value={isSummaryLoading ? "…" : (summary?.pmeExpired ?? 0)}
+          icon={GraduationCap}
+          tone="danger"
+          hint="Periodical Medical Examination — expired"
+          onClick={() => setComplianceSelection({ type: "pme", status: "EXPIRED" })}
+        />
+        <KpiCard
+          label="VTC Due Soon"
+          value={isSummaryLoading ? "…" : (summary?.vtcDueSoon ?? 0)}
           icon={GraduationCap}
           tone="warning"
-          hint="Vocational Training Certificate — due soon or expired"
-          onClick={() => setComplianceType("vtc")}
+          hint="Vocational Training Certificate — due within 30 days"
+          onClick={() => setComplianceSelection({ type: "vtc", status: "DUE_SOON" })}
+        />
+        <KpiCard
+          label="VTC Expired"
+          value={isSummaryLoading ? "…" : (summary?.vtcExpired ?? 0)}
+          icon={GraduationCap}
+          tone="danger"
+          hint="Vocational Training Certificate — expired"
+          onClick={() => setComplianceSelection({ type: "vtc", status: "EXPIRED" })}
         />
         <KpiCard
           label="Vacant Positions"
@@ -72,7 +91,7 @@ export function DashboardPage() {
 
       <ComplianceChart summary={summary} loading={isSummaryLoading} />
 
-      <CompliancePersonnelDialog type={complianceType} onClose={() => setComplianceType(null)} />
+      <CompliancePersonnelDialog selection={complianceSelection} onClose={() => setComplianceSelection(null)} />
 
       {(user?.role === "ADMIN" || user?.role === "SHIFT_INCHARGE") && <ShiftOverviewSection />}
     </div>
@@ -80,25 +99,31 @@ export function DashboardPage() {
 }
 
 function CompliancePersonnelDialog({
-  type,
+  selection,
   onClose,
 }: {
-  type: ComplianceType | null;
+  selection: ComplianceSelection;
   onClose: () => void;
 }) {
   const { user } = useAuth();
   const canEdit = user?.role === "ADMIN";
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<"" | "DUE_SOON" | "EXPIRED">("");
+  const [status, setStatus] = useState<"" | ComplianceStatus>(selection?.status ?? "");
   const [employmentStatus, setEmploymentStatus] = useState<"ACTIVE" | "TRANSFERRED" | "NOT_ENROLLED">("ACTIVE");
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const debouncedSetSearch = useDebouncedCallback((value: string) => setSearch(value), 300);
+  const type = selection?.type ?? null;
+  useEffect(() => {
+    setStatus(selection?.status ?? "");
+  }, [selection]);
   const { data: employees, isLoading } = useComplianceEmployees(type, search, status || undefined, employmentStatus);
-  const label = type === "pme" ? "PME Due Personnel" : "VTC Due Personnel";
+  const label = type === "pme"
+    ? status === "EXPIRED" ? "PME Expired Personnel" : status === "DUE_SOON" ? "PME Due Soon Personnel" : "PME Due Personnel"
+    : status === "EXPIRED" ? "VTC Expired Personnel" : status === "DUE_SOON" ? "VTC Due Soon Personnel" : "VTC Due Personnel";
   const statusLabel = type === "pme" ? "PME status" : "VTC status";
   return (
-    <Dialog open={!!type} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={!!selection} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-6xl">
         <DialogHeader>
           <DialogTitle>{label}</DialogTitle>
@@ -173,13 +198,15 @@ function ComplianceChart({
   summary,
   loading,
 }: {
-  summary: { totalEmployees: number; allocatedEmployees: number; pmeDue: number; vtcDue: number } | undefined;
+  summary: { totalEmployees: number; allocatedEmployees: number; pmeDueSoon: number; pmeExpired: number; vtcDueSoon: number; vtcExpired: number } | undefined;
   loading: boolean;
 }) {
   const values = [
     { label: "Allocated", value: summary?.allocatedEmployees ?? 0, color: "bg-success" },
-    { label: "PME due", value: summary?.pmeDue ?? 0, color: "bg-warning" },
-    { label: "VTC due", value: summary?.vtcDue ?? 0, color: "bg-danger" },
+    { label: "PME soon", value: summary?.pmeDueSoon ?? 0, color: "bg-warning" },
+    { label: "PME expired", value: summary?.pmeExpired ?? 0, color: "bg-danger" },
+    { label: "VTC soon", value: summary?.vtcDueSoon ?? 0, color: "bg-warning" },
+    { label: "VTC expired", value: summary?.vtcExpired ?? 0, color: "bg-danger" },
   ];
   const max = Math.max(summary?.totalEmployees ?? 1, 1);
   return (
