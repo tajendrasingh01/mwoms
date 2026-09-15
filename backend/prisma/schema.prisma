@@ -23,6 +23,7 @@ enum EmployeeType {
   DAILY_RATED
   MONTHLY_RATED
   STAFF
+  EXECUTIVE
 }
 
 enum EmployeeRequestStatus {

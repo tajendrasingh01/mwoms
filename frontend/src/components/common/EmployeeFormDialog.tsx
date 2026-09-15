@@ -19,22 +19,42 @@ import { useCreateEmployee, useUpdateEmployee } from "@/hooks/use-employees";
 import type { Employee } from "@/types/employee";
 
 const employeeFormSchema = z.object({
-  employeeId: z.string().trim().min(1, "Employee ID is required"),
+  employeeId: z.string().trim().optional(),
   name: z.string().trim().min(1, "Name is required"),
-  dateOfBirth: z.string().min(1, "Date of birth is required"),
-  experienceYrs: z.coerce.number().min(0, "Can't be negative"),
+  dateOfBirth: z.string().nullable().optional(),
+  experienceYrs: z.coerce.number().min(0, "Can't be negative").optional().default(0),
   designation: z.string().trim().min(1, "Designation is required"),
-  grade: z.string().optional(),
+  grade: z.string().nullable().optional(),
   department: z.string().trim().min(1, "Department is required"),
-  skill: z.string().trim().min(1, "Skill is required"),
-  dateOfJoining: z.string().min(1, "Date of joining is required"),
-  pmeDate: z.string().optional(),
-  vtcDate: z.string().optional(),
-  leaveStart: z.string().optional(),
-  leaveEnd: z.string().optional(),
-  rejoiningDate: z.string().optional(),
-  relay: z.enum(["Relay A", "Relay B", "Relay C"]),
-  employeeType: z.enum(["DAILY_RATED", "MONTHLY_RATED", "STAFF"]),
+  skill: z.string().trim().nullable().optional(),
+  dateOfJoining: z.string().nullable().optional(),
+  pmeDate: z.string().nullable().optional(),
+  vtcDate: z.string().nullable().optional(),
+  leaveStart: z.string().nullable().optional(),
+  leaveEnd: z.string().nullable().optional(),
+  rejoiningDate: z.string().nullable().optional(),
+  relay: z.enum(["Relay A", "Relay B", "Relay C"]).nullable().optional(),
+  employeeType: z.enum(["DAILY_RATED", "MONTHLY_RATED", "STAFF", "EXECUTIVE"]),
+}).superRefine((values, ctx) => {
+  if (values.employeeType === "EXECUTIVE") {
+    return;
+  }
+
+  if (!values.employeeId?.trim()) {
+    ctx.addIssue({ path: ["employeeId"], code: z.ZodIssueCode.custom, message: "Employee ID is required" });
+  }
+  if (!values.dateOfBirth) {
+    ctx.addIssue({ path: ["dateOfBirth"], code: z.ZodIssueCode.custom, message: "Date of birth is required" });
+  }
+  if (!values.dateOfJoining) {
+    ctx.addIssue({ path: ["dateOfJoining"], code: z.ZodIssueCode.custom, message: "Date of joining is required" });
+  }
+  if (!values.skill?.trim()) {
+    ctx.addIssue({ path: ["skill"], code: z.ZodIssueCode.custom, message: "Skill is required" });
+  }
+  if (!values.relay) {
+    ctx.addIssue({ path: ["relay"], code: z.ZodIssueCode.custom, message: "Relay is required" });
+  }
 });
 
 type EmployeeFormInput = z.input<typeof employeeFormSchema>;
@@ -62,7 +82,7 @@ interface EmployeeFormDialogProps {
   onOpenChange: (open: boolean) => void;
   /** When set, the dialog edits this employee instead of creating a new one. */
   employee?: Employee | null;
-  initialEmployeeType?: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF";
+  initialEmployeeType?: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
 }
 
 function toDateInputValue(iso: string | null | undefined): string {
@@ -139,14 +159,24 @@ export function EmployeeFormDialog({
   }, [open, employee, reset]);
 
   const onSubmit = async (values: EmployeeFormValues) => {
-    const payload = {
+    const isExecutive = values.employeeType === "EXECUTIVE";
+    const payload: EmployeeFormValues = {
       ...values,
+      employeeId: values.employeeId?.trim() || `EXEC-${Date.now()}`,
+      name: values.name.trim(),
+      designation: values.designation.trim(),
+      department: values.department.trim(),
+      skill: values.skill?.trim() || values.designation.trim(),
+      dateOfBirth: values.dateOfBirth || (isExecutive ? new Date("2000-01-01").toISOString() : ""),
+      dateOfJoining: values.dateOfJoining || (isExecutive ? new Date().toISOString() : ""),
+      experienceYrs: Number(values.experienceYrs ?? 0),
+      grade: values.grade?.trim() || null,
       pmeDate: values.pmeDate || null,
       vtcDate: values.vtcDate || null,
       leaveStart: values.leaveStart || null,
       leaveEnd: values.leaveEnd || null,
       rejoiningDate: values.rejoiningDate || null,
-      isActive: true,
+      relay: isExecutive ? "Relay A" : values.relay || "Relay A",
       employeeType: values.employeeType,
     };
 
@@ -172,9 +202,6 @@ export function EmployeeFormDialog({
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Employee ID" error={errors.employeeId?.message}>
-              <Input {...register("employeeId")} disabled={isEditing} />
-            </Field>
             <Field label="Employee group" error={errors.employeeType?.message}>
               <select
                 className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -182,65 +209,94 @@ export function EmployeeFormDialog({
               >
                 <option value="DAILY_RATED">Daily Rated Worker</option>
                 <option value="STAFF">Staff</option>
+                <option value="EXECUTIVE">Executive</option>
               </select>
             </Field>
-            <Field label="Name" error={errors.name?.message}>
-              <Input {...register("name")} />
-            </Field>
-            <Field label="Date of Birth" error={errors.dateOfBirth?.message}>
-              <Input type="date" {...register("dateOfBirth")} />
-            </Field>
-            <Field label="Experience (years)" error={errors.experienceYrs?.message}>
-              <Input type="number" step="0.5" min="0" {...register("experienceYrs")} />
-            </Field>
-            <Field label="Designation" error={errors.designation?.message}>
-              <Input list="staff-designations" {...register("designation")} />
-              <datalist id="staff-designations">
-                <option value="Mining Overman" />
-                <option value="Sirdar" />
-                <option value="Electrical Foreman" />
-                <option value="Mechanical Foremen" />
-                <option value="Executive: Shift Incharge" />
-              </datalist>
-            </Field>
-            <Field label="Department" error={errors.department?.message}>
-              <Input {...register("department")} />
-            </Field>
-            <Field label="Grade" error={errors.grade?.message}>
-              <Input {...register("grade")} placeholder="Optional grade" />
-            </Field>
-            <Field label="Skill" error={errors.skill?.message}>
-              <Input {...register("skill")} />
-            </Field>
-            <Field label="Relay" error={errors.relay?.message}>
-              <select
-                className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                {...register("relay")}
-              >
-                <option value="Relay A">Relay A</option>
-                <option value="Relay B">Relay B</option>
-                <option value="Relay C">Relay C</option>
-              </select>
-            </Field>
-            <Field label="Date of Joining" error={errors.dateOfJoining?.message}>
-              <Input type="date" {...register("dateOfJoining")} />
-            </Field>
-            <Field label="PME Date" error={errors.pmeDate?.message}>
-              <Input type="date" {...register("pmeDate")} />
-            </Field>
-            {selectedEmployeeType === "DAILY_RATED" && (
+            {!selectedEmployeeType || selectedEmployeeType !== "EXECUTIVE" ? (
               <>
-                <Field label="VTC Date" error={errors.vtcDate?.message}>
-                  <Input type="date" {...register("vtcDate")} />
+                <Field label="Employee ID" error={errors.employeeId?.message}>
+                  <Input {...register("employeeId")} disabled={isEditing} />
                 </Field>
-                <Field label="Leave Start" error={errors.leaveStart?.message}>
-                  <Input type="date" {...register("leaveStart")} />
+                <Field label="Name" error={errors.name?.message}>
+                  <Input {...register("name")} />
                 </Field>
-                <Field label="Leave End" error={errors.leaveEnd?.message}>
-                  <Input type="date" {...register("leaveEnd")} />
+                <Field label="Date of Birth" error={errors.dateOfBirth?.message}>
+                  <Input type="date" {...register("dateOfBirth")} />
                 </Field>
-                <Field label="Rejoining Date" error={errors.rejoiningDate?.message}>
-                  <Input type="date" {...register("rejoiningDate")} />
+                <Field label="Experience (years)" error={errors.experienceYrs?.message}>
+                  <Input type="number" step="0.5" min="0" {...register("experienceYrs")} />
+                </Field>
+                <Field label="Designation" error={errors.designation?.message}>
+                  <Input list="staff-designations" {...register("designation")} />
+                  <datalist id="staff-designations">
+                    <option value="Mining Overman" />
+                    <option value="Sirdar" />
+                    <option value="Electrical Foreman" />
+                    <option value="Mechanical Foremen" />
+                    <option value="Shift Incharge" />
+                    <option value="Panel Incharge" />
+                    <option value="Safety Officer" />
+                    <option value="Manager" />
+                  </datalist>
+                </Field>
+                <Field label="Department" error={errors.department?.message}>
+                  <Input {...register("department")} />
+                </Field>
+                <Field label="Grade" error={errors.grade?.message}>
+                  <Input {...register("grade")} placeholder="Optional grade" />
+                </Field>
+                <Field label="Skill" error={errors.skill?.message}>
+                  <Input {...register("skill")} />
+                </Field>
+                <Field label="Relay" error={errors.relay?.message}>
+                  <select
+                    className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    {...register("relay")}
+                  >
+                    <option value="Relay A">Relay A</option>
+                    <option value="Relay B">Relay B</option>
+                    <option value="Relay C">Relay C</option>
+                  </select>
+                </Field>
+                <Field label="Date of Joining" error={errors.dateOfJoining?.message}>
+                  <Input type="date" {...register("dateOfJoining")} />
+                </Field>
+                <Field label="PME Date" error={errors.pmeDate?.message}>
+                  <Input type="date" {...register("pmeDate")} />
+                </Field>
+                {selectedEmployeeType === "DAILY_RATED" && (
+                  <>
+                    <Field label="VTC Date" error={errors.vtcDate?.message}>
+                      <Input type="date" {...register("vtcDate")} />
+                    </Field>
+                    <Field label="Leave Start" error={errors.leaveStart?.message}>
+                      <Input type="date" {...register("leaveStart")} />
+                    </Field>
+                    <Field label="Leave End" error={errors.leaveEnd?.message}>
+                      <Input type="date" {...register("leaveEnd")} />
+                    </Field>
+                    <Field label="Rejoining Date" error={errors.rejoiningDate?.message}>
+                      <Input type="date" {...register("rejoiningDate")} />
+                    </Field>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                <Field label="Name" error={errors.name?.message}>
+                  <Input {...register("name")} />
+                </Field>
+                <Field label="Designation" error={errors.designation?.message}>
+                  <Input list="executive-designations" {...register("designation")} />
+                  <datalist id="executive-designations">
+                    <option value="Shift Incharge" />
+                    <option value="Panel Incharge" />
+                    <option value="Safety Officer" />
+                    <option value="Manager" />
+                  </datalist>
+                </Field>
+                <Field label="Department" error={errors.department?.message}>
+                  <Input {...register("department")} />
                 </Field>
               </>
             )}

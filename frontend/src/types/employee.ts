@@ -28,30 +28,30 @@ export interface Employee {
   medicalConditions: string | null;
   remark: string | null;
   relay: "RELAY_A" | "RELAY_B" | "RELAY_C";
-  employeeType: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF";
+  employeeType: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface EmployeeFormValues {
-  employeeId: string;
+  employeeId?: string;
   name: string;
-  dateOfBirth: string;
-  experienceYrs: number;
+  dateOfBirth?: string | null;
+  experienceYrs?: number;
   designation: string;
   grade?: string | null;
   department: string;
-  skill: string;
-  dateOfJoining: string;
-  pmeDate: string | null;
-  vtcDate: string | null;
-  leaveStart: string | null;
-  leaveEnd: string | null;
-  rejoiningDate: string | null;
-  relay: "Relay A" | "Relay B" | "Relay C";
-  isActive: boolean;
-  employeeType: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF";
+  skill?: string | null;
+  dateOfJoining?: string | null;
+  pmeDate?: string | null;
+  vtcDate?: string | null;
+  leaveStart?: string | null;
+  leaveEnd?: string | null;
+  rejoiningDate?: string | null;
+  relay?: "Relay A" | "Relay B" | "Relay C" | null;
+  isActive?: boolean;
+  employeeType: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
 }
 
 export interface EmployeeImportPreviewError {
@@ -91,7 +91,7 @@ export interface EmployeeListResponse {
 
 export interface EmployeeListParams {
   search?: string;
-  employeeType?: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF";
+  employeeType?: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
   designation?: string;
   department?: string;
   relay?: "RELAY_A" | "RELAY_B" | "RELAY_C";

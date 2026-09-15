@@ -48,7 +48,7 @@ interface ParsedEmployeeRow {
   pmeExpiry?: Date | null;
   vtcDate?: Date | null;
   vtcExpiry?: Date | null;
-  employeeType?: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF";
+  employeeType?: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
   grade?: string | null;
   medicalConditions?: string | null;
   remark?: string | null;

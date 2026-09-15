@@ -48,7 +48,7 @@ function getAbsenceDays(leaveStart: Date | null | undefined, leaveEnd: Date | nu
 
 function getCertificationDates(data: {
   dateOfBirth: Date;
-  employeeType: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF";
+  employeeType: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
   pmeDate?: Date | null;
   vtcDate?: Date | null;
   leaveStart?: Date | null;
