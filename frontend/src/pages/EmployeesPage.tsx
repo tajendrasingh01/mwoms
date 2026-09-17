@@ -38,7 +38,7 @@ export function EmployeesPage() {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [staffFormOpen, setStaffFormOpen] = useState(false);
-  const [employeeType, setEmployeeType] = useState<"" | "DAILY_RATED" | "STAFF" | "EXECUTIVE">("");
+  const [employeeType, setEmployeeType] = useState<"" | "DAILY_RATED" | "SURFACE_DR" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE">("");
   const [designation, setDesignation] = useState("");
   const [department, setDepartment] = useState("");
   const [relay, setRelay] = useState<"" | "RELAY_A" | "RELAY_B" | "RELAY_C">("");
@@ -103,7 +103,7 @@ export function EmployeesPage() {
         "Employee ID": employee.employeeId,
         Name: employee.name,
         "Father Name": employee.fatherName ?? "",
-        "Employee Type": employee.employeeType === "DAILY_RATED" ? "DR" : employee.employeeType === "MONTHLY_RATED" ? "MR" : employee.employeeType === "EXECUTIVE" ? "Executive" : "Staff",
+        "Employee Type": employee.employeeType === "DAILY_RATED" ? "DR" : employee.employeeType === "SURFACE_DR" ? "Surface DR" : employee.employeeType === "MONTHLY_RATED" ? "MR" : employee.employeeType === "EXECUTIVE" ? "Executive" : "Staff",
         "Date of Birth": displayDate(employee.dateOfBirth),
         Age: employee.age,
         Designation: employee.designation,
@@ -181,6 +181,7 @@ export function EmployeesPage() {
         <select className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={employeeType} onChange={(e) => { setEmployeeType(e.target.value as typeof employeeType); setPage(1); }}>
           <option value="">All groups</option>
           <option value="DAILY_RATED">DR - Daily Rated</option>
+          <option value="SURFACE_DR">Surface DR</option>
           <option value="MONTHLY_RATED">MR - Monthly Rated</option>
           <option value="STAFF">Staff</option>
           <option value="EXECUTIVE">Executive</option>
@@ -250,7 +251,7 @@ export function EmployeesPage() {
                     <TableCell>{employee.name}</TableCell>
                     <TableCell>
                       <Badge variant="secondary">
-                        {employee.employeeType === "DAILY_RATED" ? "DR" : employee.employeeType === "MONTHLY_RATED" ? "MR" : employee.employeeType === "EXECUTIVE" ? "Executive" : "Staff"}
+                        {employee.employeeType === "DAILY_RATED" ? "DR" : employee.employeeType === "SURFACE_DR" ? "Surface DR" : employee.employeeType === "MONTHLY_RATED" ? "MR" : employee.employeeType === "EXECUTIVE" ? "Executive" : "Staff"}
                       </Badge>
                     </TableCell>
                     <TableCell>{employee.age}</TableCell>
@@ -268,7 +269,7 @@ export function EmployeesPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {employee.employeeType === "MONTHLY_RATED" ? (
+                      {employee.employeeType === "MONTHLY_RATED" || employee.employeeType === "STAFF" || employee.employeeType === "EXECUTIVE" ? (
                         <span className="text-xs text-muted-foreground">Not required for MR</span>
                       ) : <div className="text-xs">
                         <ExpiryStatusBadge status={employee.vtcStatus} />

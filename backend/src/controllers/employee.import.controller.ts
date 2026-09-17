@@ -17,19 +17,26 @@ const HEADER_TO_FIELD: Record<string, string> = {
   department: "department",
   skill: "skill",
   dob: "dateOfBirth",
+  "date of birth": "dateOfBirth",
   doa: "dateOfJoining",
+  "date of joining": "dateOfJoining",
   pme: "pmeDate",
+  "pme date": "pmeDate",
   vtc: "vtcDate",
+  "vtc date": "vtcDate",
   age: "age",
   "due pme": "duePme",
+  "pme due": "duePme",
   "left days pme": "leftDaysPme",
   "expiry pme": "pmeExpiry",
   "due vtc": "dueVtc",
+  "vtc due": "dueVtc",
   "left days vtc": "leftDaysVtc",
   "expiry vtc": "vtcExpiry",
   "medical conditions": "medicalConditions",
   remark: "remark",
   relay: "relay",
+  "employee type": "employeeType",
 };
 
 const REQUIRED_HEADERS = ["eis no", "name", "designation", "dob", "doa"];
@@ -48,7 +55,7 @@ interface ParsedEmployeeRow {
   pmeExpiry?: Date | null;
   vtcDate?: Date | null;
   vtcExpiry?: Date | null;
-  employeeType?: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
+  employeeType?: "DAILY_RATED" | "SURFACE_DR" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
   grade?: string | null;
   medicalConditions?: string | null;
   remark?: string | null;
@@ -85,6 +92,27 @@ function parseExcelRelay(value: unknown): "RELAY_A" | "RELAY_B" | "RELAY_C" | un
   return RELAY_DISPLAY_TO_INTERNAL[value.trim().toLowerCase()];
 }
 
+function parseExcelEmployeeType(value: unknown): ParsedEmployeeRow["employeeType"] {
+  if (typeof value !== "string") return undefined;
+  switch (value.trim().toLowerCase()) {
+    case "surface dr":
+    case "surface daily rated":
+      return "SURFACE_DR";
+    case "mr":
+    case "monthly rated":
+      return "MONTHLY_RATED";
+    case "staff":
+      return "STAFF";
+    case "executive":
+      return "EXECUTIVE";
+    case "dr":
+    case "daily rated":
+      return "DAILY_RATED";
+    default:
+      return undefined;
+  }
+}
+
 function parseExcelDate(value: unknown): Date | undefined | null {
   if (value === null || value === undefined || value === "") {
     return undefined;
@@ -101,7 +129,7 @@ function parseExcelDate(value: unknown): Date | undefined | null {
   }
   const trimmed = String(value).trim();
   if (!trimmed) return undefined;
-  if (["new", "n/a", "na", "-"].includes(trimmed.toLowerCase())) return undefined;
+  if (["new", "n/a", "na", "-", "—"].includes(trimmed.toLowerCase())) return undefined;
   const parts = trimmed.replace(/[-.]/g, "/").split("/").map(Number);
   if (parts.length === 3 && parts.every(Number.isFinite)) {
     const [first, second, rawYear] = parts;
@@ -117,7 +145,7 @@ function parseExcelDate(value: unknown): Date | undefined | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-export function parseWorksheetRows(sheet: XLSX.WorkSheet): ParsedEmployeeRow[] {
+export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWorkbook?: boolean } = {}): ParsedEmployeeRow[] {
   const rawRows = XLSX.utils.sheet_to_json<(string | number | Date | null)[]>(sheet, {
     header: 1,
     defval: null,
@@ -131,8 +159,15 @@ export function parseWorksheetRows(sheet: XLSX.WorkSheet): ParsedEmployeeRow[] {
   const headerKeys = headersRow.map(normalizeHeader);
   const isMonthlyRated = headerKeys.includes("grade") && !headerKeys.includes("vtc");
 
+  const requiredHeaderAliases: Record<string, string[]> = {
+    "eis no": ["eis no", "employee id"],
+    name: ["name"],
+    designation: ["designation"],
+    dob: ["dob", "date of birth"],
+    doa: ["doa", "date of joining"],
+  };
   for (const required of REQUIRED_HEADERS) {
-    if (!headerKeys.includes(required)) {
+    if (!requiredHeaderAliases[required].some((alias) => headerKeys.includes(alias))) {
       throw new Error(`Missing required column: ${required}`);
     }
   }
@@ -156,6 +191,9 @@ export function parseWorksheetRows(sheet: XLSX.WorkSheet): ParsedEmployeeRow[] {
           break;
         case "name":
           parsedRow.name = typeof trimmed === "string" ? trimmed : undefined;
+          break;
+        case "employeeType":
+          parsedRow.employeeType = parseExcelEmployeeType(trimmed);
           break;
         case "fatherName":
           parsedRow.fatherName = typeof trimmed === "string" ? trimmed || undefined : undefined;
@@ -197,10 +235,10 @@ export function parseWorksheetRows(sheet: XLSX.WorkSheet): ParsedEmployeeRow[] {
           parsedRow.vtcExpiry = parseExcelDate(trimmed) ?? undefined;
           break;
         case "medicalConditions":
-          parsedRow.medicalConditions = typeof trimmed === "string" ? trimmed || null : null;
+          parsedRow.medicalConditions = typeof trimmed === "string" ? trimmed || undefined : undefined;
           break;
         case "remark":
-          parsedRow.remark = typeof trimmed === "string" ? trimmed || null : null;
+          parsedRow.remark = typeof trimmed === "string" ? trimmed || undefined : undefined;
           break;
         case "relay":
           parsedRow.relay = parseExcelRelay(trimmed);
@@ -212,7 +250,7 @@ export function parseWorksheetRows(sheet: XLSX.WorkSheet): ParsedEmployeeRow[] {
     parsedRow.department = parsedRow.department || (isMonthlyRated ? "Monthly Rated Employees" : "Daily Rated Workers");
     parsedRow.skill = parsedRow.skill || parsedRow.designation || "General Duty";
     parsedRow.relay = parsedRow.relay || "RELAY_A";
-    parsedRow.employeeType = isMonthlyRated ? "MONTHLY_RATED" : "DAILY_RATED";
+    parsedRow.employeeType = options.surfaceWorkbook ? "SURFACE_DR" : parsedRow.employeeType ?? (isMonthlyRated ? "MONTHLY_RATED" : "DAILY_RATED");
     return parsedRow;
   });
 }
@@ -254,10 +292,10 @@ export function validateParsedRows(rows: ParsedEmployeeRow[]): ImportError[] {
     if (row.pmeExpiry === null) {
       errors.push({ row: rowIndex, employeeId: row.employeeId, field: "Expiry PME", error: "Expiry PME must be a valid date or blank" });
     }
-    if (row.employeeType !== "MONTHLY_RATED" && row.vtcDate === null) {
+    if (row.employeeType !== "MONTHLY_RATED" && row.employeeType !== "STAFF" && row.employeeType !== "EXECUTIVE" && row.vtcDate === null) {
       errors.push({ row: rowIndex, employeeId: row.employeeId, field: "VTC", error: "VTC must be a valid date or blank" });
     }
-    if (row.employeeType !== "MONTHLY_RATED" && row.vtcExpiry === null) {
+    if (row.employeeType !== "MONTHLY_RATED" && row.employeeType !== "STAFF" && row.employeeType !== "EXECUTIVE" && row.vtcExpiry === null) {
       errors.push({ row: rowIndex, employeeId: row.employeeId, field: "Expiry VTC", error: "Expiry VTC must be a valid date or blank" });
     }
     if (row.employeeId) {
@@ -288,9 +326,9 @@ export function validateParsedRows(rows: ParsedEmployeeRow[]): ImportError[] {
 
 export function rowToEmployeeData(row: ParsedEmployeeRow) {
   const pmeDate = row.pmeDate ?? null;
-  const vtcDate = row.employeeType === "DAILY_RATED" ? row.vtcDate ?? null : null;
-  const pmeExpiry = pmeDate ? calculatePmeDueDate(row.dateOfBirth!, pmeDate) : null;
-  const vtcExpiry = vtcDate ? calculateVtcDueDate(vtcDate) : null;
+  const vtcDate = row.employeeType !== "MONTHLY_RATED" && row.employeeType !== "STAFF" && row.employeeType !== "EXECUTIVE" ? row.vtcDate ?? null : null;
+  const pmeExpiry = row.pmeExpiry ?? (pmeDate ? calculatePmeDueDate(row.dateOfBirth!, pmeDate) : null);
+  const vtcExpiry = row.vtcExpiry ?? (vtcDate ? calculateVtcDueDate(vtcDate) : null);
   return {
     employeeId: row.employeeId!.trim(),
     name: row.name!.trim(),
@@ -331,7 +369,7 @@ export async function previewEmployeeImport(req: MulterRequest, res: Response) {
 
   let rows: ParsedEmployeeRow[];
   try {
-    rows = parseWorksheetRows(sheet);
+    rows = parseWorksheetRows(sheet, { surfaceWorkbook: /surface/i.test(file.originalname) });
   } catch (error) {
     return res.status(400).json({ error: (error as Error).message });
   }
@@ -471,7 +509,7 @@ export async function importEmployeeMaster(req: MulterRequest, res: Response) {
 
   let rows: ParsedEmployeeRow[];
   try {
-    rows = parseWorksheetRows(sheet);
+    rows = parseWorksheetRows(sheet, { surfaceWorkbook: /surface/i.test(file.originalname) });
   } catch (error) {
     return res.status(400).json({ error: (error as Error).message });
   }
@@ -507,26 +545,25 @@ export async function importEmployeeMaster(req: MulterRequest, res: Response) {
         const rowData = rowToEmployeeData(row);
         const existing = existingMap.get(rowData.employeeId);
         if (existing) {
+          const updateData = {
+            name: rowData.name,
+            fatherName: row.fatherName !== undefined ? rowData.fatherName : undefined,
+            designation: rowData.designation,
+            grade: row.grade !== undefined ? rowData.grade : undefined,
+            department: row.department !== undefined ? rowData.department : undefined,
+            skill: row.skill !== undefined ? rowData.skill : undefined,
+            dateOfBirth: rowData.dateOfBirth,
+            dateOfJoining: rowData.dateOfJoining,
+            ...(row.pmeDate !== undefined ? { pmeDate: rowData.pmeDate, pmeExpiry: rowData.pmeExpiry } : {}),
+            ...(row.vtcDate !== undefined ? { vtcDate: rowData.vtcDate, vtcExpiry: rowData.vtcExpiry } : {}),
+            ...(row.medicalConditions !== undefined ? { medicalConditions: rowData.medicalConditions } : {}),
+            ...(row.remark !== undefined ? { remark: rowData.remark } : {}),
+            ...(row.relay !== undefined ? { relay: rowData.relay } : {}),
+            employeeType: rowData.employeeType,
+          };
           await tx.employee.update({
             where: { id: existing.id },
-            data: {
-              name: rowData.name,
-              fatherName: rowData.fatherName,
-              designation: rowData.designation,
-              grade: rowData.grade,
-              department: rowData.department,
-              skill: rowData.skill,
-              dateOfBirth: rowData.dateOfBirth,
-              dateOfJoining: rowData.dateOfJoining,
-              pmeDate: rowData.pmeDate,
-              pmeExpiry: rowData.pmeExpiry,
-              vtcDate: rowData.vtcDate,
-              vtcExpiry: rowData.vtcExpiry,
-              medicalConditions: rowData.medicalConditions,
-              remark: rowData.remark,
-              relay: rowData.relay,
-              employeeType: rowData.employeeType,
-            },
+            data: updateData,
           });
           if (rowData.pmeDate && rowData.pmeExpiry && existing.pmeDate?.getTime() !== rowData.pmeDate.getTime()) {
             await tx.employeeCertification.create({ data: { employeeId: existing.id, type: "PME", date: rowData.pmeDate, dueDate: rowData.pmeExpiry } });

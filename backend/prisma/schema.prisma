@@ -21,6 +21,7 @@ enum Relay {
 
 enum EmployeeType {
   DAILY_RATED
+  SURFACE_DR
   MONTHLY_RATED
   STAFF
   EXECUTIVE

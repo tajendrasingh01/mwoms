@@ -34,7 +34,7 @@ const employeeFormSchema = z.object({
   leaveEnd: z.string().nullable().optional(),
   rejoiningDate: z.string().nullable().optional(),
   relay: z.enum(["Relay A", "Relay B", "Relay C"]).nullable().optional(),
-  employeeType: z.enum(["DAILY_RATED", "MONTHLY_RATED", "STAFF", "EXECUTIVE"]),
+  employeeType: z.enum(["DAILY_RATED", "SURFACE_DR", "MONTHLY_RATED", "STAFF", "EXECUTIVE"]),
   employmentStatus: z.enum(["ACTIVE", "TRANSFERRED", "NOT_ENROLLED"]),
 }).superRefine((values, ctx) => {
   if (values.employeeType === "EXECUTIVE") {
@@ -83,7 +83,7 @@ interface EmployeeFormDialogProps {
   onOpenChange: (open: boolean) => void;
   /** When set, the dialog edits this employee instead of creating a new one. */
   employee?: Employee | null;
-  initialEmployeeType?: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
+  initialEmployeeType?: "DAILY_RATED" | "SURFACE_DR" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
 }
 
 function toDateInputValue(iso: string | null | undefined): string {
@@ -211,6 +211,7 @@ export function EmployeeFormDialog({
                 {...register("employeeType")}
               >
                 <option value="DAILY_RATED">Daily Rated Worker</option>
+                <option value="SURFACE_DR">Surface DR</option>
                 <option value="STAFF">Staff</option>
                 <option value="EXECUTIVE">Executive</option>
               </select>
@@ -277,7 +278,7 @@ export function EmployeeFormDialog({
                 <Field label="PME Date" error={errors.pmeDate?.message}>
                   <Input type="date" {...register("pmeDate")} />
                 </Field>
-                {selectedEmployeeType === "DAILY_RATED" && (
+                {(selectedEmployeeType === "DAILY_RATED" || selectedEmployeeType === "SURFACE_DR") && (
                   <>
                     <Field label="VTC Date" error={errors.vtcDate?.message}>
                       <Input type="date" {...register("vtcDate")} />

@@ -48,7 +48,7 @@ function getAbsenceDays(leaveStart: Date | null | undefined, leaveEnd: Date | nu
 
 function getCertificationDates(data: {
   dateOfBirth: Date;
-  employeeType: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
+  employeeType: "DAILY_RATED" | "SURFACE_DR" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
   pmeDate?: Date | null;
   vtcDate?: Date | null;
   leaveStart?: Date | null;
@@ -58,7 +58,7 @@ function getCertificationDates(data: {
 }) {
   const absenceDays = getAbsenceDays(data.leaveStart, data.leaveEnd, data.absenceDays ?? 0);
   const pmeExpiry = data.pmeDate ? calculatePmeDueDate(data.dateOfBirth, data.pmeDate) : null;
-  const vtcDate = data.employeeType === "DAILY_RATED" ? data.vtcDate ?? null : null;
+  const vtcDate = data.employeeType !== "MONTHLY_RATED" && data.employeeType !== "STAFF" && data.employeeType !== "EXECUTIVE" ? data.vtcDate ?? null : null;
   const vtcExpiry = vtcDate
     ? calculateVtcDueDate(vtcDate, absenceDays, data.rejoiningDate)
     : null;

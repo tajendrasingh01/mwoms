@@ -29,7 +29,7 @@ export interface Employee {
   medicalConditions: string | null;
   remark: string | null;
   relay: "RELAY_A" | "RELAY_B" | "RELAY_C";
-  employeeType: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
+  employeeType: "DAILY_RATED" | "SURFACE_DR" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
   employmentStatus: EmploymentStatus;
   isActive: boolean;
   createdAt: string;
@@ -53,7 +53,7 @@ export interface EmployeeFormValues {
   rejoiningDate?: string | null;
   relay?: "Relay A" | "Relay B" | "Relay C" | null;
   isActive?: boolean;
-  employeeType: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
+  employeeType: "DAILY_RATED" | "SURFACE_DR" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
   employmentStatus?: EmploymentStatus;
 }
 
@@ -94,7 +94,7 @@ export interface EmployeeListResponse {
 
 export interface EmployeeListParams {
   search?: string;
-  employeeType?: "DAILY_RATED" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
+  employeeType?: "DAILY_RATED" | "SURFACE_DR" | "MONTHLY_RATED" | "STAFF" | "EXECUTIVE";
   designation?: string;
   department?: string;
   relay?: "RELAY_A" | "RELAY_B" | "RELAY_C";

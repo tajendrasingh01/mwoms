@@ -39,7 +39,7 @@ const standardEmployeeSchema = z.object({
   medicalConditions: z.string().trim().optional().nullable(),
   remark: z.string().trim().optional().nullable(),
   relay: relayTransform,
-  employeeType: z.enum(["DAILY_RATED", "MONTHLY_RATED", "STAFF"]),
+  employeeType: z.enum(["DAILY_RATED", "SURFACE_DR", "MONTHLY_RATED", "STAFF"]),
   employmentStatus: employmentStatusEnum.default("ACTIVE"),
   isActive: z.boolean().default(true),
 });
@@ -95,7 +95,7 @@ export const updateEmployeeSchema = z.object({
   medicalConditions: z.string().trim().optional().nullable(),
   remark: z.string().trim().optional().nullable(),
   relay: relayTransform.optional(),
-  employeeType: z.enum(["DAILY_RATED", "MONTHLY_RATED", "STAFF", "EXECUTIVE"]).optional(),
+  employeeType: z.enum(["DAILY_RATED", "SURFACE_DR", "MONTHLY_RATED", "STAFF", "EXECUTIVE"]).optional(),
   employmentStatus: employmentStatusEnum.optional(),
   isActive: z.boolean().optional(),
 });
@@ -104,7 +104,7 @@ export const listEmployeesQuerySchema = z.object({
   search: z.string().trim().optional(),
   relay: relayInternal.optional(),
   designation: z.string().trim().optional(),
-  employeeType: z.enum(["DAILY_RATED", "MONTHLY_RATED", "STAFF", "EXECUTIVE"]).optional(),
+  employeeType: z.enum(["DAILY_RATED", "SURFACE_DR", "MONTHLY_RATED", "STAFF", "EXECUTIVE"]).optional(),
   department: z.string().trim().optional(),
   pmeStatus: expiryStatusEnum.optional(),
   vtcStatus: expiryStatusEnum.optional(),
