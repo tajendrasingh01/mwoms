@@ -2,14 +2,23 @@ import XLSX from "xlsx";
 
 import { env } from "@/config/env";
 import { prisma } from "@/lib/prisma";
-import { calculatePmeDueDate } from "@/lib/employee-utils";
+import { calculatePmeDueDate, calculateVtcDueDate } from "@/lib/employee-utils";
 import { parseWorksheetRows, rowToEmployeeData, validateParsedRows } from "@/controllers/employee.import.controller";
+
+const EMPLOYEE_CATEGORIES = [
+  { name: "DR", aliases: ["DR", "DAILY RATED", "DAILY RATED WORKERS"], employeeType: "DAILY_RATED" as const, department: "Daily Rated" },
+  { name: "MR", aliases: ["MR", "MONTHLY RATED", "MONTHLY RATED EMPLOYEES"], employeeType: "MONTHLY_RATED" as const, department: "Monthly Rated" },
+  { name: "SURFACE DR", aliases: ["SURFACE DR", "SURFACE DAILY RATED", "SURFACE DAILY RATED WORKERS"], employeeType: "SURFACE_DR" as const, department: "Surface DR" },
+];
+
+type EmployeeCategory = typeof EMPLOYEE_CATEGORIES[number];
+type WorkbookConflict = { employeeId: string; occurrences: { sheet: string; row: number }[] };
 
 type SyncStatus = {
   configured: boolean;
   connected: boolean;
   lastSyncAt: string | null;
-  lastResult: { added: number; updated: number; skipped: number; errors: number } | null;
+  lastResult: { added: number; updated: number; skipped: number; errors: number; conflicts: WorkbookConflict[] } | null;
   lastError: string | null;
 };
 
@@ -25,58 +34,102 @@ export function getGoogleDriveStatus(): SyncStatus {
   return { ...status };
 }
 
-export async function previewGoogleDriveEmployeeMaster(sheetName?: string) {
-  const buffer = await downloadWorkbook();
-  let workbook: XLSX.WorkBook;
+function normalizeSheetName(value: string): string {
+  return value.trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+function parseCategoryRows(sheet: XLSX.WorkSheet, category: EmployeeCategory) {
+  return parseWorksheetRows(sheet, {
+    employeeType: category.employeeType,
+    gradeFallback: category.name,
+    departmentFallback: category.department,
+  }).map((row) => ({
+    ...row,
+    grade: category.name,
+    department: category.department,
+    skill: row.designation || "General Duty",
+    pmeExpiry: undefined,
+    vtcExpiry: undefined,
+  }));
+}
+
+function workbookFromBuffer(buffer: Buffer): XLSX.WorkBook {
   try {
-    workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+    return XLSX.read(buffer, { type: "buffer", cellDates: true });
   } catch {
     throw new Error("Google Drive file could not be read as an Excel workbook. Check that it is an .xlsx file or a Google Sheet.");
   }
-
-  const selectedSheet = sheetName ?? workbook.SheetNames.find((name) => name.trim().toUpperCase() === "DR") ?? workbook.SheetNames[0];
-  const sheet = selectedSheet ? workbook.Sheets[selectedSheet] : undefined;
-  if (!sheet) throw new Error(`Worksheet not found: ${sheetName ?? "workbook contains no sheets"}`);
-
-  const allRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-    header: 1,
-    defval: "",
-    blankrows: true,
-    raw: false,
-    dateNF: "yyyy-mm-dd",
-  });
-  const maxRows = 100;
-  const maxColumns = 40;
-  const rows = allRows.slice(0, maxRows).map((row) => row.slice(0, maxColumns).map((cell) => {
-    if (cell === null || cell === undefined) return "";
-    if (cell instanceof Date && !Number.isNaN(cell.getTime())) return cell.toISOString().slice(0, 10);
-    return String(cell);
-  }));
-
-  return {
-    sheetNames: workbook.SheetNames,
-    sheetName: selectedSheet,
-    rows,
-    totalRows: allRows.length,
-    truncated: allRows.length > maxRows || allRows.some((row) => row.length > maxColumns),
-  };
 }
 
-function getDriveFile(urlString: string) {
-  const url = new URL(urlString);
-  if (url.hostname !== "drive.google.com" && url.hostname !== "docs.google.com") {
-    throw new Error("The employee master URL must be a Google Drive or Google Sheets sharing link.");
+function dateToPreview(value: Date | null | undefined): string {
+  return value instanceof Date && !Number.isNaN(value.getTime()) ? value.toISOString().slice(0, 10) : "";
+}
+
+export async function previewGoogleDriveEmployeeMaster(sheetName?: string, employeeIdQuery?: string) {
+  const workbook = workbookFromBuffer(await downloadWorkbook());
+  const availableSheets = new Map(workbook.SheetNames.map((name) => [normalizeSheetName(name), name]));
+  const categories = sheetName && sheetName !== "ALL"
+    ? EMPLOYEE_CATEGORIES.filter((category) => category.aliases.includes(normalizeSheetName(sheetName)))
+    : EMPLOYEE_CATEGORIES;
+  if (categories.length === 0) throw new Error(`Unsupported employee worksheet: ${sheetName}`);
+
+  const cleanRows = categories.flatMap((category) => {
+    const sourceSheetName = category.aliases.map((alias) => availableSheets.get(alias)).find(Boolean);
+    const sheet = sourceSheetName ? workbook.Sheets[sourceSheetName] : undefined;
+    if (!sheet || !sourceSheetName) throw new Error(`Workbook is missing the ${category.name} worksheet.`);
+    const parsedRows = parseCategoryRows(sheet, category);
+    const errorsByRow = new Map<number, string[]>();
+    for (const error of validateParsedRows(parsedRows)) {
+      const rowErrors = errorsByRow.get(error.row) ?? [];
+      rowErrors.push(`${error.field ?? "Row"}: ${error.error}`);
+      errorsByRow.set(error.row, rowErrors);
+    }
+    return parsedRows.map((row) => ({
+      sheet: sourceSheetName,
+      row: row.rowIndex,
+      employeeId: row.employeeId ?? "",
+      name: row.name ?? "",
+      employeeType: category.name,
+      designation: row.designation ?? "",
+      grade: category.name,
+      department: category.department,
+      skill: row.designation || "General Duty",
+      dateOfBirth: dateToPreview(row.dateOfBirth),
+      dateOfJoining: dateToPreview(row.dateOfJoining),
+      pmeDate: dateToPreview(row.pmeDate),
+      pmeDue: dateToPreview(row.pmeDate && row.dateOfBirth ? calculatePmeDueDate(row.dateOfBirth, row.pmeDate) : null),
+      vtcDate: dateToPreview(row.vtcDate),
+      vtcDue: dateToPreview(row.vtcDate ? calculateVtcDueDate(row.vtcDate) : null),
+      relay: row.relay?.replace("RELAY_", "Relay ") ?? "Relay A",
+      issues: errorsByRow.get(row.rowIndex) ?? [],
+    }));
+  });
+  const conflicts = new Map<string, { sheet: string; row: number }[]>();
+  for (const row of cleanRows) {
+    if (!row.employeeId) continue;
+    const occurrences = conflicts.get(row.employeeId) ?? [];
+    occurrences.push({ sheet: row.sheet, row: row.row });
+    conflicts.set(row.employeeId, occurrences);
+  }
+  for (const [employeeId, occurrences] of conflicts) {
+    if (new Set(occurrences.map((occurrence) => occurrence.sheet)).size < 2) continue;
+    for (const occurrence of occurrences) {
+      const row = cleanRows.find((item) => item.sheet === occurrence.sheet && item.row === occurrence.row && item.employeeId === employeeId);
+      row?.issues.push(`Employee ID also appears in ${occurrences.filter((item) => item.sheet !== occurrence.sheet).map((item) => `${item.sheet} row ${item.row}`).join(", ")}.`);
+    }
   }
 
-  const pathMatch = url.pathname.match(/\/(?:file|spreadsheets)\/d\/([\w-]+)/);
-  const id = url.searchParams.get("id") ?? pathMatch?.[1];
-  if (!id || !/^[\w-]+$/.test(id)) {
-    throw new Error("Could not find a Google Drive file ID in the employee master URL.");
-  }
+  const query = employeeIdQuery?.trim().toLowerCase();
+  const matchedRows = query ? cleanRows.filter((row) => row.employeeId.toLowerCase().includes(query)) : cleanRows;
+  const maxRows = 100;
 
   return {
-    id,
-    isGoogleSheet: url.hostname === "docs.google.com" && url.pathname.includes("/spreadsheets/"),
+    sheetNames: ["ALL", ...workbook.SheetNames],
+    sheetName: sheetName ?? "ALL",
+    rows: matchedRows.slice(0, maxRows),
+    totalRows: cleanRows.length,
+    matchedRows: matchedRows.length,
+    truncated: matchedRows.length > maxRows,
   };
 }
 
@@ -101,32 +154,32 @@ async function downloadWorkbook(): Promise<Buffer> {
   return buffer;
 }
 
-async function importWorkbook(buffer: Buffer) {
-  let workbook: XLSX.WorkBook;
-  try {
-    workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
-  } catch {
-    throw new Error("Google Drive file could not be read as an Excel workbook. Check that it is an .xlsx file or a Google Sheet.");
+function getDriveFile(urlString: string) {
+  const url = new URL(urlString);
+  if (url.hostname !== "drive.google.com" && url.hostname !== "docs.google.com") {
+    throw new Error("The employee master URL must be a Google Drive or Google Sheets sharing link.");
   }
-  const categories = [
-    { name: "DR", aliases: ["DR", "DAILY RATED", "DAILY RATED WORKERS"], employeeType: "DAILY_RATED" as const, department: "Daily Rated" },
-    { name: "MR", aliases: ["MR", "MONTHLY RATED", "MONTHLY RATED EMPLOYEES"], employeeType: "MONTHLY_RATED" as const, department: "Monthly Rated" },
-    { name: "SURFACE DR", aliases: ["SURFACE DR", "SURFACE DAILY RATED", "SURFACE DAILY RATED WORKERS"], employeeType: "SURFACE_DR" as const, department: "Surface DR" },
-  ];
-  const sheetsByName = new Map(workbook.SheetNames.map((name) => [name.trim().toUpperCase().replace(/\s+/g, " "), name]));
-  const parsedRows = categories.map((category) => {
+
+  const pathMatch = url.pathname.match(/\/(?:file|spreadsheets)\/d\/([\w-]+)/);
+  const id = url.searchParams.get("id") ?? pathMatch?.[1];
+  if (!id || !/^[\w-]+$/.test(id)) {
+    throw new Error("Could not find a Google Drive file ID in the employee master URL.");
+  }
+
+  return {
+    id,
+    isGoogleSheet: url.hostname === "docs.google.com" && url.pathname.includes("/spreadsheets/"),
+  };
+}
+
+async function importWorkbook(buffer: Buffer) {
+  const workbook = workbookFromBuffer(buffer);
+  const sheetsByName = new Map(workbook.SheetNames.map((name) => [normalizeSheetName(name), name]));
+  const parsedRows = EMPLOYEE_CATEGORIES.map((category) => {
     const sheetName = category.aliases.map((alias) => sheetsByName.get(alias)).find(Boolean);
     const sheet = sheetName ? workbook.Sheets[sheetName] : undefined;
     if (!sheet) throw new Error(`Workbook is missing the ${category.name} worksheet. Found: ${workbook.SheetNames.join(", ") || "no worksheets"}.`);
-    const rows = parseWorksheetRows(sheet, { employeeType: category.employeeType, gradeFallback: category.name, departmentFallback: category.department })
-      .map((row) => ({
-        ...row,
-        grade: category.name,
-        department: category.department,
-        skill: row.designation || "General Duty",
-        pmeExpiry: undefined,
-        vtcExpiry: undefined,
-      }));
+    const rows = parseCategoryRows(sheet, category);
     return { category, rows, errors: validateParsedRows(rows) };
   });
   const errors = parsedRows.flatMap(({ errors: sheetErrors }) => sheetErrors);
@@ -134,22 +187,28 @@ async function importWorkbook(buffer: Buffer) {
     const invalidRows = new Set(sheetErrors.map((error) => error.row));
     return rows.filter((row) => !invalidRows.has(row.rowIndex));
   });
-  const employeeTypes = new Map<string, string>();
+  const occurrencesById = new Map<string, { category: string; row: number }[]>();
   for (const { category, rows } of parsedRows) {
     for (const row of rows) {
       if (!row.employeeId) continue;
-      const existingType = employeeTypes.get(row.employeeId);
-      if (existingType && existingType !== category.name) {
-        throw new Error(`Employee ${row.employeeId} appears in both the ${existingType} and ${category.name} worksheets`);
-      }
-      employeeTypes.set(row.employeeId, category.name);
+      const occurrences = occurrencesById.get(row.employeeId) ?? [];
+      occurrences.push({ category: category.name, row: row.rowIndex });
+      occurrencesById.set(row.employeeId, occurrences);
     }
   }
+  const conflicts = [...occurrencesById.entries()]
+    .filter(([, occurrences]) => new Set(occurrences.map((occurrence) => occurrence.category)).size > 1)
+    .map(([employeeId, occurrences]) => ({
+      employeeId,
+      occurrences: occurrences.map((occurrence) => ({ sheet: occurrence.category, row: occurrence.row })),
+    }));
+  const conflictingIds = new Set(conflicts.map((conflict) => conflict.employeeId));
+  const importRows = validRows.filter((row) => !conflictingIds.has(row.employeeId!));
 
   let added = 0;
   let updated = 0;
   await prisma.$transaction(async (tx) => {
-    for (const row of validRows) {
+    for (const row of importRows) {
       const data = rowToEmployeeData(row);
       const existing = await tx.employee.findUnique({ where: { employeeId: data.employeeId }, select: { id: true, dateOfBirth: true, dateOfJoining: true } });
       if (existing) {
@@ -174,7 +233,7 @@ async function importWorkbook(buffer: Buffer) {
   }, { timeout: 60_000 });
 
   const skipped = parsedRows.reduce((total, { errors: sheetErrors }) => total + new Set(sheetErrors.map((error) => error.row)).size, 0);
-  return { added, updated, skipped, errors: errors.length };
+  return { added, updated, skipped: skipped + conflicts.reduce((total, conflict) => total + conflict.occurrences.length, 0), errors: errors.length, conflicts };
 }
 
 export async function syncGoogleDriveEmployeeMaster() {

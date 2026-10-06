@@ -30,27 +30,43 @@ interface GoogleDriveStatus {
   configured: boolean;
   connected: boolean;
   lastSyncAt: string | null;
-  lastResult: { added: number; updated: number; skipped: number; errors: number } | null;
+  lastResult: {
+    added: number;
+    updated: number;
+    skipped: number;
+    errors: number;
+    conflicts: { employeeId: string; occurrences: { sheet: string; row: number }[] }[];
+  } | null;
   lastError: string | null;
+}
+
+interface GoogleDrivePreviewRow {
+  sheet: string;
+  row: number;
+  employeeId: string;
+  name: string;
+  employeeType: string;
+  designation: string;
+  grade: string;
+  department: string;
+  skill: string;
+  dateOfBirth: string;
+  dateOfJoining: string;
+  pmeDate: string;
+  pmeDue: string;
+  vtcDate: string;
+  vtcDue: string;
+  relay: string;
+  issues: string[];
 }
 
 interface GoogleDrivePreview {
   sheetNames: string[];
   sheetName: string;
-  rows: string[][];
+  rows: GoogleDrivePreviewRow[];
   totalRows: number;
+  matchedRows: number;
   truncated: boolean;
-}
-
-function spreadsheetColumnName(index: number): string {
-  let value = index + 1;
-  let name = "";
-  while (value > 0) {
-    value -= 1;
-    name = String.fromCharCode(65 + (value % 26)) + name;
-    value = Math.floor(value / 26);
-  }
-  return name;
 }
 
 function displayDate(value: string | null): string {
@@ -80,11 +96,14 @@ export function EmployeesPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewSheet, setPreviewSheet] = useState("");
+  const [previewSearchInput, setPreviewSearchInput] = useState("");
+  const [previewSearch, setPreviewSearch] = useState("");
 
   const debouncedSetSearch = useDebouncedCallback((value: string) => {
     setSearch(value);
     setPage(1);
   }, 300);
+  const debouncedSetPreviewSearch = useDebouncedCallback(setPreviewSearch, 250);
 
   const { data, isLoading, isFetching } = useEmployees({
     search,
@@ -111,9 +130,9 @@ export function EmployeesPage() {
     onSuccess: () => queryClient.invalidateQueries(),
   });
   const googleDrivePreview = useQuery({
-    queryKey: ["google-drive", "preview", previewSheet],
+    queryKey: ["google-drive", "preview", previewSheet, previewSearch],
     queryFn: async () => (await apiClient.get<{ data: GoogleDrivePreview }>("/google-drive/preview", {
-      params: previewSheet ? { sheet: previewSheet } : undefined,
+      params: { sheet: previewSheet || "ALL", employeeId: previewSearch || undefined },
     })).data.data,
     enabled: canEdit && previewOpen,
   });
@@ -237,14 +256,14 @@ export function EmployeesPage() {
             <span className="text-muted-foreground">
               Connected{googleDriveStatus.data.lastSyncAt ? ` · Last sync ${new Date(googleDriveStatus.data.lastSyncAt).toLocaleString()}` : " · Waiting for first sync"}
               {googleDriveStatus.data.lastResult ? ` · ${googleDriveStatus.data.lastResult.updated} updated, ${googleDriveStatus.data.lastResult.added} added` : ""}
-              {googleDriveStatus.data.lastResult && googleDriveStatus.data.lastResult.errors > 0 ? ` · ${googleDriveStatus.data.lastResult.skipped} skipped, ${googleDriveStatus.data.lastResult.errors} validation issues` : ""}
+              {googleDriveStatus.data.lastResult && (googleDriveStatus.data.lastResult.errors > 0 || (googleDriveStatus.data.lastResult.conflicts?.length ?? 0) > 0) ? ` · ${googleDriveStatus.data.lastResult.skipped} skipped, ${googleDriveStatus.data.lastResult.errors} validation issues, ${googleDriveStatus.data.lastResult.conflicts?.length ?? 0} cross-sheet ID conflicts` : ""}
             </span>
           ) : (
             <span className="text-muted-foreground">Google Drive link must allow anyone with the link to view.</span>
           )}
           {googleDriveStatus.data?.configured && (
             <>
-              <Button variant="outline" size="sm" onClick={() => { setPreviewSheet(""); setPreviewOpen(true); }}>
+              <Button variant="outline" size="sm" onClick={() => { setPreviewSheet("ALL"); setPreviewSearchInput(""); setPreviewSearch(""); setPreviewOpen(true); }}>
                 <Eye />
                 View sheet
               </Button>
@@ -259,6 +278,11 @@ export function EmployeesPage() {
               {googleDriveStatus.data?.lastError ?? "Google Drive request failed. Check the server configuration and try again."}
             </span>
           )}
+          {googleDriveStatus.data?.lastResult?.conflicts?.map((conflict) => (
+            <p key={conflict.employeeId} className="w-full text-xs text-danger">
+              ID {conflict.employeeId} appears in {conflict.occurrences.map((item) => `${item.sheet} row ${item.row}`).join(" and ")}; those rows were skipped.
+            </p>
+          ))}
         </div>
       )}
 
@@ -278,32 +302,55 @@ export function EmployeesPage() {
             ) : googleDrivePreview.data ? (
               <>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <select className="h-9 min-w-48 rounded-md border border-input bg-background px-3 text-sm" value={previewSheet || googleDrivePreview.data.sheetName} onChange={(event) => setPreviewSheet(event.target.value)}>
-                    {googleDrivePreview.data.sheetNames.map((name) => <option key={name} value={name}>{name}</option>)}
-                  </select>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select className="h-9 min-w-48 rounded-md border border-input bg-background px-3 text-sm" value={previewSheet || "ALL"} onChange={(event) => setPreviewSheet(event.target.value)}>
+                      {googleDrivePreview.data.sheetNames.map((name) => <option key={name} value={name}>{name === "ALL" ? "All worksheets" : name}</option>)}
+                    </select>
+                    <Input
+                      className="w-64"
+                      placeholder="Search employee number"
+                      value={previewSearchInput}
+                      onChange={(event) => { setPreviewSearchInput(event.target.value); debouncedSetPreviewSearch(event.target.value); }}
+                    />
+                  </div>
                   <span className="text-xs text-muted-foreground">
-                    Showing {googleDrivePreview.data.rows.length} of {googleDrivePreview.data.totalRows} rows{googleDrivePreview.data.truncated ? " · preview limited to first 100 rows / 40 columns" : ""}
+                    {previewSearch ? `${googleDrivePreview.data.matchedRows} matching rows` : `Showing ${googleDrivePreview.data.rows.length} of ${googleDrivePreview.data.totalRows} rows`}{googleDrivePreview.data.truncated ? " · first 100 matches shown" : ""}
                   </span>
                 </div>
                 <div className="max-h-[65vh] overflow-auto rounded-md border border-border">
                   <table className="min-w-max border-collapse text-xs">
                     <thead className="sticky top-0 bg-muted text-muted-foreground">
                       <tr>
-                        <th className="sticky left-0 z-10 border-b border-r border-border bg-muted px-2 py-2 text-right">#</th>
-                        {Array.from({ length: Math.max(0, ...googleDrivePreview.data.rows.map((row) => row.length)) }, (_, index) => (
-                          <th key={index} className="border-b border-r border-border px-3 py-2 text-left font-medium">{spreadsheetColumnName(index)}</th>
+                        {["Sheet", "Row", "Employee ID", "Name", "Type", "Designation", "Grade", "Department", "Skill", "DOB", "DOJ", "PME Date", "PME Due", "VTC Date", "VTC Due", "Relay", "Issues"].map((heading) => (
+                          <th key={heading} className="border-b border-r border-border px-3 py-2 text-left font-medium">{heading}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {googleDrivePreview.data.rows.map((row, rowIndex) => (
-                        <tr key={rowIndex} className="odd:bg-background even:bg-muted/20">
-                          <th className="sticky left-0 border-r border-border bg-muted px-2 py-1 text-right font-normal text-muted-foreground">{rowIndex + 1}</th>
-                          {Array.from({ length: Math.max(0, ...googleDrivePreview.data.rows.map((cells) => cells.length)) }, (_, columnIndex) => (
-                            <td key={columnIndex} className="max-w-64 border-b border-r border-border px-3 py-1.5 align-top">{row[columnIndex] || ""}</td>
-                          ))}
+                      {googleDrivePreview.data.rows.map((row) => (
+                        <tr key={`${row.sheet}-${row.row}`} className="odd:bg-background even:bg-muted/20">
+                          <td className="border-b border-r border-border px-3 py-1.5">{row.sheet}</td>
+                          <td className="border-b border-r border-border px-3 py-1.5">{row.row}</td>
+                          <td className="border-b border-r border-border px-3 py-1.5 font-medium">{row.employeeId || "—"}</td>
+                          <td className="border-b border-r border-border px-3 py-1.5">{row.name || "—"}</td>
+                          <td className="border-b border-r border-border px-3 py-1.5">{row.employeeType}</td>
+                          <td className="border-b border-r border-border px-3 py-1.5">{row.designation || "—"}</td>
+                          <td className="border-b border-r border-border px-3 py-1.5">{row.grade}</td>
+                          <td className="border-b border-r border-border px-3 py-1.5">{row.department}</td>
+                          <td className="border-b border-r border-border px-3 py-1.5">{row.skill}</td>
+                          <td className="border-b border-r border-border px-3 py-1.5">{row.dateOfBirth || "—"}</td>
+                          <td className="border-b border-r border-border px-3 py-1.5">{row.dateOfJoining || "—"}</td>
+                          <td className="border-b border-r border-border px-3 py-1.5">{row.pmeDate || "—"}</td>
+                          <td className="border-b border-r border-border px-3 py-1.5">{row.pmeDue || "—"}</td>
+                          <td className="border-b border-r border-border px-3 py-1.5">{row.vtcDate || "—"}</td>
+                          <td className="border-b border-r border-border px-3 py-1.5">{row.vtcDue || "—"}</td>
+                          <td className="border-b border-r border-border px-3 py-1.5">{row.relay}</td>
+                          <td className="max-w-72 border-b border-r border-border px-3 py-1.5 text-danger">{row.issues.join("; ") || "—"}</td>
                         </tr>
                       ))}
+                      {googleDrivePreview.data.rows.length === 0 && (
+                        <tr><td colSpan={17} className="px-3 py-8 text-center text-muted-foreground">No employee rows match this search.</td></tr>
+                      )}
                     </tbody>
                   </table>
                 </div>

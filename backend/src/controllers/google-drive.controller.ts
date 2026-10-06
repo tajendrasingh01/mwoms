@@ -12,6 +12,7 @@ export async function syncGoogleDrive(_req: Request, res: Response) {
 
 export async function previewGoogleDrive(_req: Request, res: Response) {
   const requestedSheet = typeof _req.query.sheet === "string" ? _req.query.sheet : undefined;
-  try { return res.json({ data: await previewGoogleDriveEmployeeMaster(requestedSheet) }); }
+  const employeeId = typeof _req.query.employeeId === "string" ? _req.query.employeeId : undefined;
+  try { return res.json({ data: await previewGoogleDriveEmployeeMaster(requestedSheet, employeeId) }); }
   catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : "Google Drive preview failed" }); }
 }
