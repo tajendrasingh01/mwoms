@@ -1,4 +1,5 @@
 import XLSX from "xlsx";
+import type { Prisma } from "@prisma/client";
 
 import { env } from "@/config/env";
 import { prisma } from "@/lib/prisma";
@@ -205,32 +206,55 @@ async function importWorkbook(buffer: Buffer) {
   const conflictingIds = new Set(conflicts.map((conflict) => conflict.employeeId));
   const importRows = validRows.filter((row) => !conflictingIds.has(row.employeeId!));
 
-  let added = 0;
-  let updated = 0;
-  await prisma.$transaction(async (tx) => {
-    for (const row of importRows) {
-      const data = rowToEmployeeData(row);
-      const existing = await tx.employee.findUnique({ where: { employeeId: data.employeeId }, select: { id: true, dateOfBirth: true, dateOfJoining: true } });
-      if (existing) {
-        const dateOfBirth = data.dateOfBirth ?? existing.dateOfBirth;
-        await tx.employee.update({
-          where: { id: existing.id },
-          data: {
-            ...data,
-            dateOfBirth,
-            dateOfJoining: data.dateOfJoining ?? existing.dateOfJoining,
-            pmeExpiry: data.pmeDate && dateOfBirth ? calculatePmeDueDate(dateOfBirth, data.pmeDate) : null,
-            experienceYrs: undefined,
-            isActive: undefined,
-          },
-        });
-        updated += 1;
-      } else {
-        await tx.employee.create({ data });
-        added += 1;
-      }
+  const sourceData = importRows.map(rowToEmployeeData);
+  const existingEmployees = sourceData.length > 0
+    ? await prisma.employee.findMany({
+        where: { employeeId: { in: sourceData.map((employee) => employee.employeeId) } },
+        select: { id: true, employeeId: true, dateOfBirth: true, dateOfJoining: true },
+      })
+    : [];
+  const existingById = new Map(existingEmployees.map((employee) => [employee.employeeId, employee]));
+  const newEmployees: typeof sourceData = [];
+  const employeeUpdates: { id: string; data: Prisma.EmployeeUpdateInput }[] = [];
+
+  for (const data of sourceData) {
+    const existing = existingById.get(data.employeeId);
+    if (!existing) {
+      newEmployees.push(data);
+      continue;
     }
-  }, { timeout: 60_000 });
+
+    const dateOfBirth = data.dateOfBirth ?? existing.dateOfBirth;
+    employeeUpdates.push({
+      id: existing.id,
+      data: {
+        ...data,
+        dateOfBirth,
+        dateOfJoining: data.dateOfJoining ?? existing.dateOfJoining,
+        pmeExpiry: data.pmeDate && dateOfBirth ? calculatePmeDueDate(dateOfBirth, data.pmeDate) : null,
+        experienceYrs: undefined,
+        isActive: undefined,
+      },
+    });
+  }
+
+  let added = 0;
+  const createBatchSize = 500;
+  for (let offset = 0; offset < newEmployees.length; offset += createBatchSize) {
+    const result = await prisma.employee.createMany({
+      data: newEmployees.slice(offset, offset + createBatchSize),
+      skipDuplicates: true,
+    });
+    added += result.count;
+  }
+
+  let updated = 0;
+  const updateBatchSize = 25;
+  for (let offset = 0; offset < employeeUpdates.length; offset += updateBatchSize) {
+    const batch = employeeUpdates.slice(offset, offset + updateBatchSize);
+    await Promise.all(batch.map(({ id, data }) => prisma.employee.update({ where: { id }, data })));
+    updated += batch.length;
+  }
 
   const skipped = parsedRows.reduce((total, { errors: sheetErrors }) => total + new Set(sheetErrors.map((error) => error.row)).size, 0);
   return { added, updated, skipped: skipped + conflicts.reduce((total, conflict) => total + conflict.occurrences.length, 0), errors: errors.length, conflicts };
