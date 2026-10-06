@@ -75,13 +75,12 @@ const HEADER_TO_FIELD: Record<string, string> = {
   "employee type": "employeeType",
 };
 
-const REQUIRED_HEADERS = ["eis no", "name", "designation", "dob", "doa"];
-const REQUIRED_HEADER_ALIASES: Record<string, string[]> = {
-  "eis no": ["eis no", "eis number", "eis", "employee id", "employee no", "employee number", "emp id", "emp no", "personnel no", "personnel number", "staff id"],
-  name: ["name", "employee name", "name of employee", "worker name"],
-  designation: ["designation", "job title", "post held"],
-  dob: ["dob", "date of birth", "birth date", "birthday"],
-  doa: ["doa", "date of joining", "doj", "joining date", "date joined", "date of appointment"],
+const REQUIRED_FIELD_LABELS: Record<string, string> = {
+  employeeId: "employee ID (EIS No.)",
+  name: "employee name",
+  designation: "designation",
+  dateOfBirth: "date of birth (DOB)",
+  dateOfJoining: "date of joining (DOJ/DOA)",
 };
 
 interface ParsedEmployeeRow {
@@ -131,6 +130,33 @@ function cellToText(value: unknown): string | undefined {
   return text || undefined;
 }
 
+function fieldForHeader(header: string): string | undefined {
+  const exactMatch = HEADER_TO_FIELD[header];
+  if (exactMatch) return exactMatch;
+
+  if (/\b(eis|employee|emp|personnel|staff)\b/.test(header) && /\b(id|no|number)\b/.test(header)) return "employeeId";
+  if (/\b(dob|birth)\b|\bd o b\b/.test(header)) return "dateOfBirth";
+  if (/\b(doj|doa)\b|\b(join|joining|joined|appointment|appointed)\b/.test(header)) return "dateOfJoining";
+  if (/\b(employee|worker)\b/.test(header) && /\bname\b/.test(header)) return "name";
+  if (/\b(designation|job title|post held)\b/.test(header)) return "designation";
+  if (/\b(grade|pay grade)\b/.test(header)) return "grade";
+  if (/\b(department|dept)\b/.test(header)) return "department";
+  if (/\b(skill|trade)\b/.test(header)) return "skill";
+  if (/\bpme\b/.test(header)) {
+    if (/\b(status|days|left)\b/.test(header)) return undefined;
+    return /\b(due|expiry|expire)\b/.test(header) ? "pmeExpiry" : "pmeDate";
+  }
+  if (/\bvtc\b/.test(header)) {
+    if (/\b(status|days|left)\b/.test(header)) return undefined;
+    return /\b(due|expiry|expire)\b/.test(header) ? "vtcExpiry" : "vtcDate";
+  }
+  if (/\b(relay|shift)\b/.test(header)) return "relay";
+  if (/\b(father|parent)\b/.test(header) && /\bname\b/.test(header)) return "fatherName";
+  if (/\b(medical|health)\b/.test(header)) return "medicalConditions";
+  if (/\b(remark|remarks|comment)\b/.test(header)) return "remark";
+  return undefined;
+}
+
 const RELAY_DISPLAY_TO_INTERNAL: Record<string, "RELAY_A" | "RELAY_B" | "RELAY_C"> = {
   "relay a": "RELAY_A",
   "relay b": "RELAY_B",
@@ -166,7 +192,27 @@ function parseExcelEmployeeType(value: unknown): ParsedEmployeeRow["employeeType
   }
 }
 
-function parseExcelDate(value: unknown): Date | undefined | null {
+type ExcelDateOrder = "DMY" | "MDY";
+
+function inferExcelDateOrder(header: string, values: unknown[]): ExcelDateOrder {
+  if (/\b(mm|month)\b.*\b(dd|day)\b/.test(header)) return "MDY";
+  if (/\b(dd|day)\b.*\b(mm|month)\b/.test(header)) return "DMY";
+
+  let monthFirst = 0;
+  let dayFirst = 0;
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const parts = value.trim().match(/^(\d{1,2})[/. -](\d{1,2})[/. -]\d{2,4}$/);
+    if (!parts) continue;
+    const first = Number(parts[1]);
+    const second = Number(parts[2]);
+    if (first > 12 && second <= 12) dayFirst += 1;
+    if (second > 12 && first <= 12) monthFirst += 1;
+  }
+  return monthFirst > dayFirst ? "MDY" : "DMY";
+}
+
+function parseExcelDate(value: unknown, dateOrder: ExcelDateOrder = "DMY"): Date | undefined | null {
   if (value === null || value === undefined || value === "") {
     return undefined;
   }
@@ -195,7 +241,7 @@ function parseExcelDate(value: unknown): Date | undefined | null {
     const yearFirst = firstPart.length === 4;
     let year = yearFirst ? first : third;
     if (!yearFirst && year < 100) year += year >= 50 ? 1900 : 2000;
-    const monthFirst = !yearFirst && first <= 12 && second > 12;
+    const monthFirst = !yearFirst && first <= 12 && (second > 12 || dateOrder === "MDY");
     const day = yearFirst ? third : monthFirst ? second : first;
     const month = (yearFirst ? second : monthFirst ? first : second) - 1;
     const parsed = new Date(year, month, day);
@@ -205,7 +251,7 @@ function parseExcelDate(value: unknown): Date | undefined | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWorkbook?: boolean; employeeType?: ParsedEmployeeRow["employeeType"] } = {}): ParsedEmployeeRow[] {
+export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWorkbook?: boolean; employeeType?: ParsedEmployeeRow["employeeType"]; gradeFallback?: string } = {}): ParsedEmployeeRow[] {
   const rawRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
     header: 1,
     defval: null,
@@ -221,9 +267,10 @@ export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWork
     const candidate = rawRows[rowIndex];
     if (!Array.isArray(candidate)) continue;
     const keys = candidate.map(normalizeHeader);
-    const recognizedFields = new Set(keys.map((key) => HEADER_TO_FIELD[key]).filter(Boolean));
-    const hasEmployeeId = REQUIRED_HEADER_ALIASES["eis no"].some((alias) => keys.includes(alias));
-    const hasName = REQUIRED_HEADER_ALIASES.name.some((alias) => keys.includes(alias));
+    const mappedFields = keys.map(fieldForHeader);
+    const recognizedFields = new Set(mappedFields.filter(Boolean));
+    const hasEmployeeId = mappedFields.includes("employeeId");
+    const hasName = mappedFields.includes("name");
     const score = recognizedFields.size + (hasEmployeeId ? 10 : 0) + (hasName ? 10 : 0);
     if (hasEmployeeId && hasName && score > bestHeaderScore) {
       headerRowIndex = rowIndex;
@@ -236,20 +283,30 @@ export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWork
     throw new Error("Could not find a valid header row. Include employee ID and name columns.");
   }
   const headerKeys = headersRow.map(normalizeHeader);
-  const isMonthlyRated = headerKeys.includes("grade") && !headerKeys.includes("vtc");
+  const mappedFields = headerKeys.map(fieldForHeader);
+  const foundFields = new Set(mappedFields.filter(Boolean));
+  const isMonthlyRated = foundFields.has("grade") && !foundFields.has("vtcDate");
 
-  for (const required of REQUIRED_HEADERS) {
-    if (!REQUIRED_HEADER_ALIASES[required].some((alias) => headerKeys.includes(alias))) {
-      throw new Error(`Missing required column: ${required}`);
+  for (const [field, label] of Object.entries(REQUIRED_FIELD_LABELS)) {
+    if (!foundFields.has(field)) {
+      const found = headerKeys.filter(Boolean).join(", ");
+      throw new Error(`Missing required column: ${label}. Found headers: ${found || "none"}.`);
     }
   }
 
-  const fieldIndexes = headerKeys.reduce<Record<number, string>>((acc, header, index) => {
-    if (HEADER_TO_FIELD[header]) {
-      acc[index] = HEADER_TO_FIELD[header];
+  const fieldIndexes = mappedFields.reduce<Record<number, string>>((acc, field, index) => {
+    if (field) {
+      acc[index] = field;
     }
     return acc;
   }, {});
+  const dateFields = new Set(["dateOfBirth", "dateOfJoining", "pmeDate", "pmeExpiry", "duePme", "vtcDate", "vtcExpiry", "dueVtc"]);
+  const dateOrderByColumn = headersRow.map((_, columnIndex) => {
+    const field = fieldIndexes[columnIndex];
+    if (!field || !dateFields.has(field)) return "DMY" as const;
+    const values = rawRows.slice(headerRowIndex + 1).flatMap((row) => Array.isArray(row) ? [row[columnIndex]] : []);
+    return inferExcelDateOrder(headerKeys[columnIndex], values);
+  });
 
   return rawRows.slice(headerRowIndex + 1).filter((rawRow) => Array.isArray(rawRow) && rawRow.some((value) => value !== null && String(value).trim() !== "")).map((rawRow: unknown[], dataIndex: number) => {
     const parsedRow: ParsedEmployeeRow = { rowIndex: headerRowIndex + dataIndex + 2 };
@@ -283,28 +340,28 @@ export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWork
           parsedRow.skill = cellToText(trimmed);
           break;
         case "dateOfBirth":
-          parsedRow.dateOfBirth = parseExcelDate(trimmed) ?? undefined;
+          parsedRow.dateOfBirth = parseExcelDate(trimmed, dateOrderByColumn[columnIndex]) ?? undefined;
           break;
         case "dateOfJoining":
-          parsedRow.dateOfJoining = parseExcelDate(trimmed) ?? undefined;
+          parsedRow.dateOfJoining = parseExcelDate(trimmed, dateOrderByColumn[columnIndex]) ?? undefined;
           break;
         case "pmeDate":
-          parsedRow.pmeDate = parseExcelDate(trimmed);
+          parsedRow.pmeDate = parseExcelDate(trimmed, dateOrderByColumn[columnIndex]);
           break;
         case "pmeExpiry":
-          parsedRow.pmeExpiry = parseExcelDate(trimmed);
+          parsedRow.pmeExpiry = parseExcelDate(trimmed, dateOrderByColumn[columnIndex]);
           break;
         case "duePme":
-          parsedRow.pmeExpiry = parseExcelDate(trimmed);
+          parsedRow.pmeExpiry = parseExcelDate(trimmed, dateOrderByColumn[columnIndex]);
           break;
         case "vtcDate":
-          parsedRow.vtcDate = parseExcelDate(trimmed);
+          parsedRow.vtcDate = parseExcelDate(trimmed, dateOrderByColumn[columnIndex]);
           break;
         case "vtcExpiry":
-          parsedRow.vtcExpiry = parseExcelDate(trimmed);
+          parsedRow.vtcExpiry = parseExcelDate(trimmed, dateOrderByColumn[columnIndex]);
           break;
         case "dueVtc":
-          parsedRow.vtcExpiry = parseExcelDate(trimmed);
+          parsedRow.vtcExpiry = parseExcelDate(trimmed, dateOrderByColumn[columnIndex]);
           break;
         case "medicalConditions":
           parsedRow.medicalConditions = cellToText(trimmed);
@@ -322,6 +379,7 @@ export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWork
     parsedRow.department = parsedRow.department || (isMonthlyRated ? "Monthly Rated Employees" : "Daily Rated Workers");
     parsedRow.skill = parsedRow.skill || parsedRow.designation || "General Duty";
     parsedRow.relay = parsedRow.relay || "RELAY_A";
+    parsedRow.grade = parsedRow.grade ?? options.gradeFallback ?? null;
     parsedRow.employeeType = options.employeeType ?? (options.surfaceWorkbook ? "SURFACE_DR" : parsedRow.employeeType ?? (isMonthlyRated ? "MONTHLY_RATED" : "DAILY_RATED"));
     return parsedRow;
   });

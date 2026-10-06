@@ -80,7 +80,7 @@ async function importWorkbook(buffer: Buffer) {
     const sheetName = category.aliases.map((alias) => sheetsByName.get(alias)).find(Boolean);
     const sheet = sheetName ? workbook.Sheets[sheetName] : undefined;
     if (!sheet) throw new Error(`Workbook is missing the ${category.name} worksheet. Found: ${workbook.SheetNames.join(", ") || "no worksheets"}.`);
-    const rows = parseWorksheetRows(sheet, { employeeType: category.employeeType });
+    const rows = parseWorksheetRows(sheet, { employeeType: category.employeeType, gradeFallback: category.name });
     return { category, rows, errors: validateParsedRows(rows) };
   });
   const errors = parsedRows.flatMap(({ errors: sheetErrors }) => sheetErrors);
