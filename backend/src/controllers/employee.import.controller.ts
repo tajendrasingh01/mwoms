@@ -8,38 +8,81 @@ type MulterRequest = Request & { file?: Express.Multer.File };
 
 const HEADER_TO_FIELD: Record<string, string> = {
   "eis no": "employeeId",
-  "eis no.": "employeeId",
+  "eis number": "employeeId",
+  "eis": "employeeId",
   "employee id": "employeeId",
+  "employee no": "employeeId",
+  "employee number": "employeeId",
+  "emp id": "employeeId",
+  "emp no": "employeeId",
+  "personnel no": "employeeId",
+  "personnel number": "employeeId",
+  "staff id": "employeeId",
   name: "name",
+  "employee name": "name",
+  "name of employee": "name",
+  "worker name": "name",
   "father name": "fatherName",
+  "father s name": "fatherName",
+  "fathers name": "fatherName",
   designation: "designation",
+  "job title": "designation",
+  "post held": "designation",
   grade: "grade",
+  "pay grade": "grade",
   department: "department",
+  dept: "department",
   skill: "skill",
+  trade: "skill",
   dob: "dateOfBirth",
   "date of birth": "dateOfBirth",
+  "birth date": "dateOfBirth",
+  birthday: "dateOfBirth",
   doa: "dateOfJoining",
   "date of joining": "dateOfJoining",
+  doj: "dateOfJoining",
+  "joining date": "dateOfJoining",
+  "date joined": "dateOfJoining",
+  "date of appointment": "dateOfJoining",
   pme: "pmeDate",
   "pme date": "pmeDate",
+  "medical date": "pmeDate",
+  "last medical": "pmeDate",
   vtc: "vtcDate",
   "vtc date": "vtcDate",
+  "training date": "vtcDate",
   age: "age",
   "due pme": "duePme",
   "pme due": "duePme",
+  "pme expiry date": "pmeExpiry",
   "left days pme": "leftDaysPme",
   "expiry pme": "pmeExpiry",
+  "pme expiry": "pmeExpiry",
   "due vtc": "dueVtc",
   "vtc due": "dueVtc",
+  "vtc expiry date": "vtcExpiry",
   "left days vtc": "leftDaysVtc",
   "expiry vtc": "vtcExpiry",
+  "vtc expiry": "vtcExpiry",
   "medical conditions": "medicalConditions",
+  "medical condition": "medicalConditions",
+  "health conditions": "medicalConditions",
   remark: "remark",
+  remarks: "remark",
+  comments: "remark",
   relay: "relay",
+  shift: "relay",
   "employee type": "employeeType",
 };
 
 const REQUIRED_HEADERS = ["eis no", "name", "designation", "dob", "doa"];
+const REQUIRED_HEADER_ALIASES: Record<string, string[]> = {
+  "eis no": ["eis no", "eis number", "eis", "employee id", "employee no", "employee number", "emp id", "emp no", "personnel no", "personnel number", "staff id"],
+  name: ["name", "employee name", "name of employee", "worker name"],
+  designation: ["designation", "job title", "post held"],
+  dob: ["dob", "date of birth", "birth date", "birthday"],
+  doa: ["doa", "date of joining", "doj", "joining date", "date joined", "date of appointment"],
+};
 
 interface ParsedEmployeeRow {
   rowIndex: number;
@@ -77,8 +120,15 @@ function normalizeHeader(value: unknown): string {
   return value
     .trim()
     .toLowerCase()
-    .replace(/\./g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
     .replace(/\s+/g, " ");
+}
+
+function cellToText(value: unknown): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  const text = String(value).trim();
+  return text || undefined;
 }
 
 const RELAY_DISPLAY_TO_INTERNAL: Record<string, "RELAY_A" | "RELAY_B" | "RELAY_C"> = {
@@ -88,8 +138,11 @@ const RELAY_DISPLAY_TO_INTERNAL: Record<string, "RELAY_A" | "RELAY_B" | "RELAY_C
 };
 
 function parseExcelRelay(value: unknown): "RELAY_A" | "RELAY_B" | "RELAY_C" | undefined {
-  if (typeof value !== "string") return undefined;
-  return RELAY_DISPLAY_TO_INTERNAL[value.trim().toLowerCase()];
+  const normalized = cellToText(value)?.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  if (!normalized) return undefined;
+  const relay = normalized.match(/(?:relay )?([abc])(?: relay)?$/);
+  if (relay) return `RELAY_${relay[1].toUpperCase()}` as "RELAY_A" | "RELAY_B" | "RELAY_C";
+  return RELAY_DISPLAY_TO_INTERNAL[normalized];
 }
 
 function parseExcelEmployeeType(value: unknown): ParsedEmployeeRow["employeeType"] {
@@ -130,14 +183,21 @@ function parseExcelDate(value: unknown): Date | undefined | null {
   const trimmed = String(value).trim();
   if (!trimmed) return undefined;
   if (["new", "n/a", "na", "-", "—"].includes(trimmed.toLowerCase())) return undefined;
-  const parts = trimmed.replace(/[-.]/g, "/").split("/").map(Number);
-  if (parts.length === 3 && parts.every(Number.isFinite)) {
-    const [first, second, rawYear] = parts;
-    let year = rawYear;
-    if (year < 100) year += year >= 50 ? 1900 : 2000;
-    const dayFirst = first > 12 || (second <= 12 && trimmed.split("/")[2].length === 4);
-    const day = dayFirst ? first : second;
-    const month = (dayFirst ? second : first) - 1;
+  if (/^\d{5}(?:\.\d+)?$/.test(trimmed)) {
+    return parseExcelDate(Number(trimmed));
+  }
+  const components = trimmed.match(/^(\d{1,4})[-/.](\d{1,2})[-/.](\d{1,4})$/);
+  if (components) {
+    const [, firstPart, secondPart, thirdPart] = components;
+    const first = Number(firstPart);
+    const second = Number(secondPart);
+    const third = Number(thirdPart);
+    const yearFirst = firstPart.length === 4;
+    let year = yearFirst ? first : third;
+    if (!yearFirst && year < 100) year += year >= 50 ? 1900 : 2000;
+    const monthFirst = !yearFirst && first <= 12 && second > 12;
+    const day = yearFirst ? third : monthFirst ? second : first;
+    const month = (yearFirst ? second : monthFirst ? first : second) - 1;
     const parsed = new Date(year, month, day);
     return parsed.getFullYear() === year && parsed.getMonth() === month && parsed.getDate() === day ? parsed : null;
   }
@@ -146,7 +206,7 @@ function parseExcelDate(value: unknown): Date | undefined | null {
 }
 
 export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWorkbook?: boolean; employeeType?: ParsedEmployeeRow["employeeType"] } = {}): ParsedEmployeeRow[] {
-  const rawRows = XLSX.utils.sheet_to_json<(string | number | Date | null)[]>(sheet, {
+  const rawRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
     header: 1,
     defval: null,
   });
@@ -155,19 +215,31 @@ export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWork
     return [];
   }
 
-  const headersRow = rawRows[0] as unknown[];
+  let headerRowIndex = 0;
+  let bestHeaderScore = -1;
+  for (let rowIndex = 0; rowIndex < Math.min(rawRows.length, 30); rowIndex += 1) {
+    const candidate = rawRows[rowIndex];
+    if (!Array.isArray(candidate)) continue;
+    const keys = candidate.map(normalizeHeader);
+    const recognizedFields = new Set(keys.map((key) => HEADER_TO_FIELD[key]).filter(Boolean));
+    const hasEmployeeId = REQUIRED_HEADER_ALIASES["eis no"].some((alias) => keys.includes(alias));
+    const hasName = REQUIRED_HEADER_ALIASES.name.some((alias) => keys.includes(alias));
+    const score = recognizedFields.size + (hasEmployeeId ? 10 : 0) + (hasName ? 10 : 0);
+    if (hasEmployeeId && hasName && score > bestHeaderScore) {
+      headerRowIndex = rowIndex;
+      bestHeaderScore = score;
+    }
+  }
+
+  const headersRow = rawRows[headerRowIndex];
+  if (!Array.isArray(headersRow)) {
+    throw new Error("Could not find a valid header row. Include employee ID and name columns.");
+  }
   const headerKeys = headersRow.map(normalizeHeader);
   const isMonthlyRated = headerKeys.includes("grade") && !headerKeys.includes("vtc");
 
-  const requiredHeaderAliases: Record<string, string[]> = {
-    "eis no": ["eis no", "employee id"],
-    name: ["name"],
-    designation: ["designation"],
-    dob: ["dob", "date of birth"],
-    doa: ["doa", "date of joining"],
-  };
   for (const required of REQUIRED_HEADERS) {
-    if (!requiredHeaderAliases[required].some((alias) => headerKeys.includes(alias))) {
+    if (!REQUIRED_HEADER_ALIASES[required].some((alias) => headerKeys.includes(alias))) {
       throw new Error(`Missing required column: ${required}`);
     }
   }
@@ -179,8 +251,8 @@ export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWork
     return acc;
   }, {});
 
-  return rawRows.slice(1).filter((rawRow) => rawRow.some((value) => value !== null && String(value).trim() !== "")).map((rawRow: (string | number | Date | null)[], rowIndex: number) => {
-    const parsedRow: ParsedEmployeeRow = { rowIndex: rowIndex + 2 };
+  return rawRows.slice(headerRowIndex + 1).filter((rawRow) => Array.isArray(rawRow) && rawRow.some((value) => value !== null && String(value).trim() !== "")).map((rawRow: unknown[], dataIndex: number) => {
+    const parsedRow: ParsedEmployeeRow = { rowIndex: headerRowIndex + dataIndex + 2 };
     rawRow.forEach((cellValue, columnIndex) => {
       const field = fieldIndexes[columnIndex];
       if (!field) return;
@@ -190,25 +262,25 @@ export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWork
           parsedRow.employeeId = trimmed !== null && trimmed !== undefined ? String(trimmed).trim() || undefined : undefined;
           break;
         case "name":
-          parsedRow.name = typeof trimmed === "string" ? trimmed : undefined;
+          parsedRow.name = cellToText(trimmed);
           break;
         case "employeeType":
           parsedRow.employeeType = parseExcelEmployeeType(trimmed);
           break;
         case "fatherName":
-          parsedRow.fatherName = typeof trimmed === "string" ? trimmed || undefined : undefined;
+          parsedRow.fatherName = cellToText(trimmed);
           break;
         case "designation":
-          parsedRow.designation = typeof trimmed === "string" ? trimmed : undefined;
+          parsedRow.designation = cellToText(trimmed);
           break;
         case "grade":
           parsedRow.grade = trimmed === null || trimmed === undefined ? null : String(trimmed).trim() || null;
           break;
         case "department":
-          parsedRow.department = typeof trimmed === "string" ? trimmed : undefined;
+          parsedRow.department = cellToText(trimmed);
           break;
         case "skill":
-          parsedRow.skill = typeof trimmed === "string" ? trimmed : undefined;
+          parsedRow.skill = cellToText(trimmed);
           break;
         case "dateOfBirth":
           parsedRow.dateOfBirth = parseExcelDate(trimmed) ?? undefined;
@@ -217,28 +289,28 @@ export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWork
           parsedRow.dateOfJoining = parseExcelDate(trimmed) ?? undefined;
           break;
         case "pmeDate":
-          parsedRow.pmeDate = parseExcelDate(trimmed) ?? undefined;
+          parsedRow.pmeDate = parseExcelDate(trimmed);
           break;
         case "pmeExpiry":
-          parsedRow.pmeExpiry = parseExcelDate(trimmed) ?? undefined;
+          parsedRow.pmeExpiry = parseExcelDate(trimmed);
           break;
         case "duePme":
-          parsedRow.pmeExpiry = parseExcelDate(trimmed) ?? undefined;
+          parsedRow.pmeExpiry = parseExcelDate(trimmed);
           break;
         case "vtcDate":
-          parsedRow.vtcDate = parseExcelDate(trimmed) ?? undefined;
+          parsedRow.vtcDate = parseExcelDate(trimmed);
           break;
         case "vtcExpiry":
-          parsedRow.vtcExpiry = parseExcelDate(trimmed) ?? undefined;
+          parsedRow.vtcExpiry = parseExcelDate(trimmed);
           break;
         case "dueVtc":
-          parsedRow.vtcExpiry = parseExcelDate(trimmed) ?? undefined;
+          parsedRow.vtcExpiry = parseExcelDate(trimmed);
           break;
         case "medicalConditions":
-          parsedRow.medicalConditions = typeof trimmed === "string" ? trimmed || undefined : undefined;
+          parsedRow.medicalConditions = cellToText(trimmed);
           break;
         case "remark":
-          parsedRow.remark = typeof trimmed === "string" ? trimmed || undefined : undefined;
+          parsedRow.remark = cellToText(trimmed);
           break;
         case "relay":
           parsedRow.relay = parseExcelRelay(trimmed);

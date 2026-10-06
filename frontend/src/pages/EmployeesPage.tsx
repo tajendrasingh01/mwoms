@@ -208,6 +208,7 @@ export function EmployeesPage() {
             <span className="text-muted-foreground">
               Connected{googleDriveStatus.data.lastSyncAt ? ` · Last sync ${new Date(googleDriveStatus.data.lastSyncAt).toLocaleString()}` : " · Waiting for first sync"}
               {googleDriveStatus.data.lastResult ? ` · ${googleDriveStatus.data.lastResult.updated} updated, ${googleDriveStatus.data.lastResult.added} added` : ""}
+              {googleDriveStatus.data.lastResult && googleDriveStatus.data.lastResult.errors > 0 ? ` · ${googleDriveStatus.data.lastResult.skipped} skipped, ${googleDriveStatus.data.lastResult.errors} validation issues` : ""}
             </span>
           ) : (
             <span className="text-muted-foreground">Google Drive link must allow anyone with the link to view.</span>

@@ -64,17 +64,22 @@ async function downloadWorkbook(): Promise<Buffer> {
 }
 
 async function importWorkbook(buffer: Buffer) {
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  let workbook: XLSX.WorkBook;
+  try {
+    workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  } catch {
+    throw new Error("Google Drive file could not be read as an Excel workbook. Check that it is an .xlsx file or a Google Sheet.");
+  }
   const categories = [
-    { name: "DR", employeeType: "DAILY_RATED" as const },
-    { name: "MR", employeeType: "MONTHLY_RATED" as const },
-    { name: "SURFACE DR", employeeType: "SURFACE_DR" as const },
+    { name: "DR", aliases: ["DR", "DAILY RATED", "DAILY RATED WORKERS"], employeeType: "DAILY_RATED" as const },
+    { name: "MR", aliases: ["MR", "MONTHLY RATED", "MONTHLY RATED EMPLOYEES"], employeeType: "MONTHLY_RATED" as const },
+    { name: "SURFACE DR", aliases: ["SURFACE DR", "SURFACE DAILY RATED", "SURFACE DAILY RATED WORKERS"], employeeType: "SURFACE_DR" as const },
   ];
   const sheetsByName = new Map(workbook.SheetNames.map((name) => [name.trim().toUpperCase().replace(/\s+/g, " "), name]));
   const parsedRows = categories.map((category) => {
-    const sheetName = sheetsByName.get(category.name);
+    const sheetName = category.aliases.map((alias) => sheetsByName.get(alias)).find(Boolean);
     const sheet = sheetName ? workbook.Sheets[sheetName] : undefined;
-    if (!sheet) throw new Error(`Workbook is missing the ${category.name} worksheet`);
+    if (!sheet) throw new Error(`Workbook is missing the ${category.name} worksheet. Found: ${workbook.SheetNames.join(", ") || "no worksheets"}.`);
     const rows = parseWorksheetRows(sheet, { employeeType: category.employeeType });
     return { category, rows, errors: validateParsedRows(rows) };
   });
