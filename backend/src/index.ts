@@ -13,8 +13,8 @@ import shiftAllocationRoutes from "@/routes/shift-allocation.routes";
 import userRoutes from "@/routes/user.routes";
 import notificationRoutes from "@/routes/notification.routes";
 import dashboardRoutes from "@/routes/dashboard.routes";
-import oneDriveRoutes from "@/routes/onedrive.routes";
-import { startOneDriveSync } from "@/services/onedrive-sync.service";
+import googleDriveRoutes from "@/routes/google-drive.routes";
+import { startGoogleDriveSync } from "@/services/google-drive-sync.service";
 
 const app = express();
 
@@ -62,7 +62,7 @@ app.use("/api/shift-allocations", shiftAllocationRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/onedrive", oneDriveRoutes);
+app.use("/api/google-drive", googleDriveRoutes);
 
 if (env.NODE_ENV === "production") {
   const frontendDist = path.resolve(__dirname, "../../frontend/dist");
@@ -78,5 +78,5 @@ app.use((_req, res) => {
 
 app.listen(env.PORT, () => {
   console.log(`MWOMS backend listening on http://localhost:${env.PORT}`);
-  startOneDriveSync();
+  startGoogleDriveSync();
 });

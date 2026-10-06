@@ -23,8 +23,8 @@ const envSchema = z.object({
     return value;
   }, z.boolean()).default(true),
   SESSION_COOKIE_SAMESITE: z.enum(["lax", "strict", "none"]).default("none"),
-  ONEDRIVE_EMPLOYEE_MASTER_URL: z.string().url().default("https://southeasterno365-my.sharepoint.com/:x:/g/personal/chrm60_southeasterno365_onmicrosoft_com/IQCpLWBBOLaYTpwWTik4BkG6Aa5SG5mU_70kRs4YwR31t2c?e=AnDWF8"),
-  ONEDRIVE_SYNC_INTERVAL_MINUTES: z.coerce.number().int().min(0).default(5),
+  GOOGLE_DRIVE_EMPLOYEE_MASTER_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url().optional()),
+  GOOGLE_DRIVE_SYNC_INTERVAL_MINUTES: z.coerce.number().int().min(0).default(5),
 });
 
 const parsed = envSchema.safeParse(process.env);

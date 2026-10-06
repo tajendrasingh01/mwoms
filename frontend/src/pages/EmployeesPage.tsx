@@ -25,7 +25,7 @@ import { apiClient } from "@/services/api-client";
 import { useAuth } from "@/store/auth-store";
 import type { Employee, EmploymentStatus } from "@/types/employee";
 
-interface OneDriveStatus {
+interface GoogleDriveStatus {
   configured: boolean;
   connected: boolean;
   lastSyncAt: string | null;
@@ -78,14 +78,14 @@ export function EmployeesPage() {
     pageSize: 25,
   });
   const deactivateEmployee = useDeactivateEmployee();
-  const oneDriveStatus = useQuery({
-    queryKey: ["onedrive", "status"],
-    queryFn: async () => (await apiClient.get<{ data: OneDriveStatus }>("/onedrive/status")).data.data,
+  const googleDriveStatus = useQuery({
+    queryKey: ["google-drive", "status"],
+    queryFn: async () => (await apiClient.get<{ data: GoogleDriveStatus }>("/google-drive/status")).data.data,
     enabled: canEdit,
     refetchInterval: 5000,
   });
-  const syncOneDrive = useMutation({
-    mutationFn: () => apiClient.post("/onedrive/sync"),
+  const syncGoogleDrive = useMutation({
+    mutationFn: () => apiClient.post("/google-drive/sync"),
     onSuccess: () => queryClient.invalidateQueries(),
   });
 
@@ -201,26 +201,26 @@ export function EmployeesPage() {
       {canEdit && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
           <Cloud className="size-4 text-muted-foreground" />
-          <span className="font-medium">OneDrive employee master</span>
-          {!oneDriveStatus.data?.configured ? (
-            <span className="text-muted-foreground">Set the employee workbook link on the server.</span>
-          ) : oneDriveStatus.data.connected ? (
+          <span className="font-medium">Google Drive employee master</span>
+          {!googleDriveStatus.data?.configured ? (
+            <span className="text-muted-foreground">Set GOOGLE_DRIVE_EMPLOYEE_MASTER_URL on the server.</span>
+          ) : googleDriveStatus.data.connected ? (
             <span className="text-muted-foreground">
-              Connected{oneDriveStatus.data.lastSyncAt ? ` · Last sync ${new Date(oneDriveStatus.data.lastSyncAt).toLocaleString()}` : " · Waiting for first sync"}
-              {oneDriveStatus.data.lastResult ? ` · ${oneDriveStatus.data.lastResult.updated} updated, ${oneDriveStatus.data.lastResult.added} added` : ""}
+              Connected{googleDriveStatus.data.lastSyncAt ? ` · Last sync ${new Date(googleDriveStatus.data.lastSyncAt).toLocaleString()}` : " · Waiting for first sync"}
+              {googleDriveStatus.data.lastResult ? ` · ${googleDriveStatus.data.lastResult.updated} updated, ${googleDriveStatus.data.lastResult.added} added` : ""}
             </span>
           ) : (
-            <span className="text-muted-foreground">Workbook link must allow anyone with the link to view.</span>
+            <span className="text-muted-foreground">Google Drive link must allow anyone with the link to view.</span>
           )}
-          {oneDriveStatus.data?.configured && (
-            <Button variant="outline" size="sm" onClick={() => syncOneDrive.mutate()} disabled={syncOneDrive.isPending}>
-              {syncOneDrive.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+          {googleDriveStatus.data?.configured && (
+            <Button variant="outline" size="sm" onClick={() => syncGoogleDrive.mutate()} disabled={syncGoogleDrive.isPending}>
+              {syncGoogleDrive.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
               Sync now
             </Button>
           )}
-          {(oneDriveStatus.data?.lastError || syncOneDrive.error) && (
+          {(googleDriveStatus.data?.lastError || syncGoogleDrive.error) && (
             <span className="w-full text-xs text-danger">
-              {oneDriveStatus.data?.lastError ?? "OneDrive request failed. Check the server configuration and try again."}
+              {googleDriveStatus.data?.lastError ?? "Google Drive request failed. Check the server configuration and try again."}
             </span>
           )}
         </div>

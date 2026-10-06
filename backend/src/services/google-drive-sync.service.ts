@@ -13,25 +13,52 @@ type SyncStatus = {
 };
 
 const status: SyncStatus = {
-  configured: !!env.ONEDRIVE_EMPLOYEE_MASTER_URL,
+  configured: !!env.GOOGLE_DRIVE_EMPLOYEE_MASTER_URL,
   connected: false,
   lastSyncAt: null,
   lastResult: null,
   lastError: null,
 };
 
-export function getOneDriveStatus(): SyncStatus {
+export function getGoogleDriveStatus(): SyncStatus {
   return { ...status };
 }
 
+function getDriveFile(urlString: string) {
+  const url = new URL(urlString);
+  if (url.hostname !== "drive.google.com" && url.hostname !== "docs.google.com") {
+    throw new Error("The employee master URL must be a Google Drive or Google Sheets sharing link.");
+  }
+
+  const pathMatch = url.pathname.match(/\/(?:file|spreadsheets)\/d\/([\w-]+)/);
+  const id = url.searchParams.get("id") ?? pathMatch?.[1];
+  if (!id || !/^[\w-]+$/.test(id)) {
+    throw new Error("Could not find a Google Drive file ID in the employee master URL.");
+  }
+
+  return {
+    id,
+    isGoogleSheet: url.hostname === "docs.google.com" && url.pathname.includes("/spreadsheets/"),
+  };
+}
+
 async function downloadWorkbook(): Promise<Buffer> {
-  const url = new URL(env.ONEDRIVE_EMPLOYEE_MASTER_URL);
-  url.searchParams.set("download", "1");
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`OneDrive could not download the employee master workbook (${response.status}). Check that its link is accessible to anyone with the link.`);
+  if (!env.GOOGLE_DRIVE_EMPLOYEE_MASTER_URL) {
+    throw new Error("Set GOOGLE_DRIVE_EMPLOYEE_MASTER_URL to the publicly shared employee workbook.");
+  }
+
+  const { id, isGoogleSheet } = getDriveFile(env.GOOGLE_DRIVE_EMPLOYEE_MASTER_URL);
+  const downloadUrl = isGoogleSheet
+    ? `https://docs.google.com/spreadsheets/d/${id}/export?format=xlsx`
+    : `https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download&authuser=0&confirm=t`;
+  const response = await fetch(downloadUrl);
+  if (!response.ok) {
+    throw new Error(`Google Drive could not download the employee master workbook (${response.status}). Check its sharing permission.`);
+  }
+
   const buffer = Buffer.from(await response.arrayBuffer());
   if (buffer[0] !== 0x50 || buffer[1] !== 0x4b) {
-    throw new Error("OneDrive returned a sign-in or preview page instead of the workbook. Change link access to Anyone with the link can view.");
+    throw new Error("Google Drive returned a web page instead of an Excel workbook. Set sharing to Anyone with the link: Viewer.");
   }
   return buffer;
 }
@@ -49,11 +76,7 @@ async function importWorkbook(buffer: Buffer) {
     const sheet = sheetName ? workbook.Sheets[sheetName] : undefined;
     if (!sheet) throw new Error(`Workbook is missing the ${category.name} worksheet`);
     const rows = parseWorksheetRows(sheet, { employeeType: category.employeeType });
-    return {
-      category,
-      rows,
-      errors: validateParsedRows(rows),
-    };
+    return { category, rows, errors: validateParsedRows(rows) };
   });
   const errors = parsedRows.flatMap(({ errors: sheetErrors }) => sheetErrors);
   const validRows = parsedRows.flatMap(({ rows, errors: sheetErrors }) => {
@@ -71,21 +94,28 @@ async function importWorkbook(buffer: Buffer) {
       employeeTypes.set(row.employeeId, category.name);
     }
   }
+
   let added = 0;
   let updated = 0;
   await prisma.$transaction(async (tx) => {
     for (const row of validRows) {
       const data = rowToEmployeeData(row);
       const existing = await tx.employee.findUnique({ where: { employeeId: data.employeeId }, select: { id: true } });
-      if (existing) { await tx.employee.update({ where: { id: existing.id }, data: { ...data, experienceYrs: undefined, isActive: undefined } }); updated += 1; }
-      else { await tx.employee.create({ data }); added += 1; }
+      if (existing) {
+        await tx.employee.update({ where: { id: existing.id }, data: { ...data, experienceYrs: undefined, isActive: undefined } });
+        updated += 1;
+      } else {
+        await tx.employee.create({ data });
+        added += 1;
+      }
     }
   }, { timeout: 60_000 });
+
   const skipped = parsedRows.reduce((total, { errors: sheetErrors }) => total + new Set(sheetErrors.map((error) => error.row)).size, 0);
   return { added, updated, skipped, errors: errors.length };
 }
 
-export async function syncOneDriveFiles() {
+export async function syncGoogleDriveEmployeeMaster() {
   try {
     const result = await importWorkbook(await downloadWorkbook());
     status.connected = true;
@@ -95,14 +125,14 @@ export async function syncOneDriveFiles() {
     return result;
   } catch (error) {
     status.connected = false;
-    status.lastError = error instanceof Error ? error.message : "OneDrive sync failed";
+    status.lastError = error instanceof Error ? error.message : "Google Drive sync failed";
     throw error;
   }
 }
 
-export function startOneDriveSync() {
-  if (env.ONEDRIVE_SYNC_INTERVAL_MINUTES <= 0) return;
-  const sync = () => { void syncOneDriveFiles().catch((error) => { status.lastError = error instanceof Error ? error.message : "OneDrive sync failed"; }); };
+export function startGoogleDriveSync() {
+  if (!env.GOOGLE_DRIVE_EMPLOYEE_MASTER_URL || env.GOOGLE_DRIVE_SYNC_INTERVAL_MINUTES <= 0) return;
+  const sync = () => { void syncGoogleDriveEmployeeMaster().catch(() => undefined); };
   sync();
-  setInterval(sync, env.ONEDRIVE_SYNC_INTERVAL_MINUTES * 60_000);
+  setInterval(sync, env.GOOGLE_DRIVE_SYNC_INTERVAL_MINUTES * 60_000);
 }

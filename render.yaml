@@ -23,7 +23,9 @@ services:
         sync: false
       - key: SEED_ADMIN_PASSWORD
         sync: false
-      - key: ONEDRIVE_SYNC_INTERVAL_MINUTES
+      - key: GOOGLE_DRIVE_EMPLOYEE_MASTER_URL
+        sync: false
+      - key: GOOGLE_DRIVE_SYNC_INTERVAL_MINUTES
         value: "5"
       - key: DATABASE_URL
         fromDatabase:
