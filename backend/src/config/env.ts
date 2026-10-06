@@ -23,12 +23,8 @@ const envSchema = z.object({
     return value;
   }, z.boolean()).default(true),
   SESSION_COOKIE_SAMESITE: z.enum(["lax", "strict", "none"]).default("none"),
-  ONEDRIVE_CLIENT_ID: z.string().optional(),
-  ONEDRIVE_TENANT_ID: z.string().default("consumers"),
-  ONEDRIVE_FOLDER_PATH: z.string().default("MWOMS"),
-  ONEDRIVE_DR_FILE: z.string().default("DR MASTER.xlsx"),
-  ONEDRIVE_MR_FILE: z.string().default("MR.xlsx"),
-  ONEDRIVE_SYNC_INTERVAL_MINUTES: z.coerce.number().int().min(0).default(0),
+  ONEDRIVE_EMPLOYEE_MASTER_URL: z.string().url().default("https://southeasterno365-my.sharepoint.com/:x:/g/personal/chrm60_southeasterno365_onmicrosoft_com/IQCpLWBBOLaYTpwWTik4BkG6Aa5SG5mU_70kRs4YwR31t2c?e=AnDWF8"),
+  ONEDRIVE_SYNC_INTERVAL_MINUTES: z.coerce.number().int().min(0).default(5),
 });
 
 const parsed = envSchema.safeParse(process.env);

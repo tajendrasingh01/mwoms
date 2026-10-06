@@ -145,7 +145,7 @@ function parseExcelDate(value: unknown): Date | undefined | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWorkbook?: boolean } = {}): ParsedEmployeeRow[] {
+export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWorkbook?: boolean; employeeType?: ParsedEmployeeRow["employeeType"] } = {}): ParsedEmployeeRow[] {
   const rawRows = XLSX.utils.sheet_to_json<(string | number | Date | null)[]>(sheet, {
     header: 1,
     defval: null,
@@ -250,7 +250,7 @@ export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWork
     parsedRow.department = parsedRow.department || (isMonthlyRated ? "Monthly Rated Employees" : "Daily Rated Workers");
     parsedRow.skill = parsedRow.skill || parsedRow.designation || "General Duty";
     parsedRow.relay = parsedRow.relay || "RELAY_A";
-    parsedRow.employeeType = options.surfaceWorkbook ? "SURFACE_DR" : parsedRow.employeeType ?? (isMonthlyRated ? "MONTHLY_RATED" : "DAILY_RATED");
+    parsedRow.employeeType = options.employeeType ?? (options.surfaceWorkbook ? "SURFACE_DR" : parsedRow.employeeType ?? (isMonthlyRated ? "MONTHLY_RATED" : "DAILY_RATED"));
     return parsedRow;
   });
 }

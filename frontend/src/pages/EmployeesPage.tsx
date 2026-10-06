@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
-import { Search, Plus, Pencil, UserX, Loader2, FileUp, Download } from "lucide-react";
+import { Search, Plus, Pencil, UserX, Loader2, FileUp, Download, Cloud, RefreshCw } from "lucide-react";
 import * as XLSX from "xlsx";
 
 import { Button } from "@/components/ui/button";
@@ -20,8 +21,17 @@ import { EmployeeFormDialog } from "@/components/common/EmployeeFormDialog";
 import { EmployeeImportDialog } from "@/components/common/EmployeeImportDialog";
 import { useEmployees, useDeactivateEmployee } from "@/hooks/use-employees";
 import { listAllEmployeesRequest } from "@/services/employee.service";
+import { apiClient } from "@/services/api-client";
 import { useAuth } from "@/store/auth-store";
 import type { Employee, EmploymentStatus } from "@/types/employee";
+
+interface OneDriveStatus {
+  configured: boolean;
+  connected: boolean;
+  lastSyncAt: string | null;
+  lastResult: { added: number; updated: number; skipped: number; errors: number } | null;
+  lastError: string | null;
+}
 
 function displayDate(value: string | null): string {
   return value ? new Date(value).toLocaleDateString() : "—";
@@ -30,6 +40,7 @@ function displayDate(value: string | null): string {
 export function EmployeesPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "ADMIN";
+  const queryClient = useQueryClient();
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -67,6 +78,16 @@ export function EmployeesPage() {
     pageSize: 25,
   });
   const deactivateEmployee = useDeactivateEmployee();
+  const oneDriveStatus = useQuery({
+    queryKey: ["onedrive", "status"],
+    queryFn: async () => (await apiClient.get<{ data: OneDriveStatus }>("/onedrive/status")).data.data,
+    enabled: canEdit,
+    refetchInterval: 5000,
+  });
+  const syncOneDrive = useMutation({
+    mutationFn: () => apiClient.post("/onedrive/sync"),
+    onSuccess: () => queryClient.invalidateQueries(),
+  });
 
   const openAddDialog = () => {
     setEditingEmployee(null);
@@ -176,6 +197,34 @@ export function EmployeesPage() {
           )}
         </div>
       </div>
+
+      {canEdit && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+          <Cloud className="size-4 text-muted-foreground" />
+          <span className="font-medium">OneDrive employee master</span>
+          {!oneDriveStatus.data?.configured ? (
+            <span className="text-muted-foreground">Set the employee workbook link on the server.</span>
+          ) : oneDriveStatus.data.connected ? (
+            <span className="text-muted-foreground">
+              Connected{oneDriveStatus.data.lastSyncAt ? ` · Last sync ${new Date(oneDriveStatus.data.lastSyncAt).toLocaleString()}` : " · Waiting for first sync"}
+              {oneDriveStatus.data.lastResult ? ` · ${oneDriveStatus.data.lastResult.updated} updated, ${oneDriveStatus.data.lastResult.added} added` : ""}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">Workbook link must allow anyone with the link to view.</span>
+          )}
+          {oneDriveStatus.data?.configured && (
+            <Button variant="outline" size="sm" onClick={() => syncOneDrive.mutate()} disabled={syncOneDrive.isPending}>
+              {syncOneDrive.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+              Sync now
+            </Button>
+          )}
+          {(oneDriveStatus.data?.lastError || syncOneDrive.error) && (
+            <span className="w-full text-xs text-danger">
+              {oneDriveStatus.data?.lastError ?? "OneDrive request failed. Check the server configuration and try again."}
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-2 rounded-md border border-border bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-8">
         <select className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={employeeType} onChange={(e) => { setEmployeeType(e.target.value as typeof employeeType); setPage(1); }}>
