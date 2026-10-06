@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
-import { Search, Plus, Pencil, UserX, Loader2, FileUp, Download, Cloud, RefreshCw } from "lucide-react";
+import { Search, Plus, Pencil, UserX, Loader2, FileUp, Download, Cloud, RefreshCw, Eye } from "lucide-react";
 import * as XLSX from "xlsx";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { ExpiryStatusBadge } from "@/components/common/ExpiryStatusBadge";
 import { EmployeeFormDialog } from "@/components/common/EmployeeFormDialog";
 import { EmployeeImportDialog } from "@/components/common/EmployeeImportDialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useEmployees, useDeactivateEmployee } from "@/hooks/use-employees";
 import { listAllEmployeesRequest } from "@/services/employee.service";
 import { apiClient } from "@/services/api-client";
@@ -31,6 +32,25 @@ interface GoogleDriveStatus {
   lastSyncAt: string | null;
   lastResult: { added: number; updated: number; skipped: number; errors: number } | null;
   lastError: string | null;
+}
+
+interface GoogleDrivePreview {
+  sheetNames: string[];
+  sheetName: string;
+  rows: string[][];
+  totalRows: number;
+  truncated: boolean;
+}
+
+function spreadsheetColumnName(index: number): string {
+  let value = index + 1;
+  let name = "";
+  while (value > 0) {
+    value -= 1;
+    name = String.fromCharCode(65 + (value % 26)) + name;
+    value = Math.floor(value / 26);
+  }
+  return name;
 }
 
 function displayDate(value: string | null): string {
@@ -58,6 +78,8 @@ export function EmployeesPage() {
   const [activeFilter, setActiveFilter] = useState<"" | "true" | "false">("");
   const [employmentStatus, setEmploymentStatus] = useState<"" | EmploymentStatus>("");
   const [isExporting, setIsExporting] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewSheet, setPreviewSheet] = useState("");
 
   const debouncedSetSearch = useDebouncedCallback((value: string) => {
     setSearch(value);
@@ -87,6 +109,13 @@ export function EmployeesPage() {
   const syncGoogleDrive = useMutation({
     mutationFn: () => apiClient.post("/google-drive/sync"),
     onSuccess: () => queryClient.invalidateQueries(),
+  });
+  const googleDrivePreview = useQuery({
+    queryKey: ["google-drive", "preview", previewSheet],
+    queryFn: async () => (await apiClient.get<{ data: GoogleDrivePreview }>("/google-drive/preview", {
+      params: previewSheet ? { sheet: previewSheet } : undefined,
+    })).data.data,
+    enabled: canEdit && previewOpen,
   });
 
   const openAddDialog = () => {
@@ -214,10 +243,16 @@ export function EmployeesPage() {
             <span className="text-muted-foreground">Google Drive link must allow anyone with the link to view.</span>
           )}
           {googleDriveStatus.data?.configured && (
-            <Button variant="outline" size="sm" onClick={() => syncGoogleDrive.mutate()} disabled={syncGoogleDrive.isPending}>
-              {syncGoogleDrive.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-              Sync now
-            </Button>
+            <>
+              <Button variant="outline" size="sm" onClick={() => { setPreviewSheet(""); setPreviewOpen(true); }}>
+                <Eye />
+                View sheet
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => syncGoogleDrive.mutate()} disabled={syncGoogleDrive.isPending}>
+                {syncGoogleDrive.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                Sync now
+              </Button>
+            </>
           )}
           {(googleDriveStatus.data?.lastError || syncGoogleDrive.error) && (
             <span className="w-full text-xs text-danger">
@@ -225,6 +260,57 @@ export function EmployeesPage() {
             </span>
           )}
         </div>
+      )}
+
+      {canEdit && (
+        <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+          <DialogContent className="max-w-7xl">
+            <DialogHeader>
+              <DialogTitle>Google Drive employee sheet</DialogTitle>
+              <DialogDescription>Read-only preview of the selected worksheet.</DialogDescription>
+            </DialogHeader>
+            {googleDrivePreview.isLoading ? (
+              <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>
+            ) : googleDrivePreview.error ? (
+              <p className="rounded-md border border-danger/20 bg-danger/10 p-3 text-sm text-danger">
+                {(googleDrivePreview.error as { response?: { data?: { error?: string } } }).response?.data?.error ?? "Could not load the Google Drive sheet."}
+              </p>
+            ) : googleDrivePreview.data ? (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <select className="h-9 min-w-48 rounded-md border border-input bg-background px-3 text-sm" value={previewSheet || googleDrivePreview.data.sheetName} onChange={(event) => setPreviewSheet(event.target.value)}>
+                    {googleDrivePreview.data.sheetNames.map((name) => <option key={name} value={name}>{name}</option>)}
+                  </select>
+                  <span className="text-xs text-muted-foreground">
+                    Showing {googleDrivePreview.data.rows.length} of {googleDrivePreview.data.totalRows} rows{googleDrivePreview.data.truncated ? " · preview limited to first 100 rows / 40 columns" : ""}
+                  </span>
+                </div>
+                <div className="max-h-[65vh] overflow-auto rounded-md border border-border">
+                  <table className="min-w-max border-collapse text-xs">
+                    <thead className="sticky top-0 bg-muted text-muted-foreground">
+                      <tr>
+                        <th className="sticky left-0 z-10 border-b border-r border-border bg-muted px-2 py-2 text-right">#</th>
+                        {Array.from({ length: Math.max(0, ...googleDrivePreview.data.rows.map((row) => row.length)) }, (_, index) => (
+                          <th key={index} className="border-b border-r border-border px-3 py-2 text-left font-medium">{spreadsheetColumnName(index)}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {googleDrivePreview.data.rows.map((row, rowIndex) => (
+                        <tr key={rowIndex} className="odd:bg-background even:bg-muted/20">
+                          <th className="sticky left-0 border-r border-border bg-muted px-2 py-1 text-right font-normal text-muted-foreground">{rowIndex + 1}</th>
+                          {Array.from({ length: Math.max(0, ...googleDrivePreview.data.rows.map((cells) => cells.length)) }, (_, columnIndex) => (
+                            <td key={columnIndex} className="max-w-64 border-b border-r border-border px-3 py-1.5 align-top">{row[columnIndex] || ""}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : null}
+          </DialogContent>
+        </Dialog>
       )}
 
       <div className="grid grid-cols-1 gap-2 rounded-md border border-border bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-8">

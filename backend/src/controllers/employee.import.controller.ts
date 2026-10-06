@@ -128,6 +128,14 @@ function cellToText(value: unknown): string | undefined {
   return text || undefined;
 }
 
+function parseEmployeeId(value: unknown): string | undefined {
+  const employeeId = cellToText(value);
+  if (!employeeId || ["blank", "none", "null", "n/a", "na", "not available", "-", "—"].includes(employeeId.toLowerCase())) {
+    return undefined;
+  }
+  return employeeId;
+}
+
 function fieldForHeader(header: string): string | undefined {
   const exactMatch = HEADER_TO_FIELD[header];
   if (exactMatch) return exactMatch;
@@ -314,7 +322,7 @@ export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWork
       const trimmed = typeof cellValue === "string" ? cellValue.trim() : cellValue;
       switch (field) {
         case "employeeId":
-          parsedRow.employeeId = trimmed !== null && trimmed !== undefined ? String(trimmed).trim() || undefined : undefined;
+          parsedRow.employeeId = parseEmployeeId(trimmed);
           break;
         case "name":
           parsedRow.name = cellToText(trimmed);

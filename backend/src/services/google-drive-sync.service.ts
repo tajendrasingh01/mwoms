@@ -25,6 +25,43 @@ export function getGoogleDriveStatus(): SyncStatus {
   return { ...status };
 }
 
+export async function previewGoogleDriveEmployeeMaster(sheetName?: string) {
+  const buffer = await downloadWorkbook();
+  let workbook: XLSX.WorkBook;
+  try {
+    workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  } catch {
+    throw new Error("Google Drive file could not be read as an Excel workbook. Check that it is an .xlsx file or a Google Sheet.");
+  }
+
+  const selectedSheet = sheetName ?? workbook.SheetNames.find((name) => name.trim().toUpperCase() === "DR") ?? workbook.SheetNames[0];
+  const sheet = selectedSheet ? workbook.Sheets[selectedSheet] : undefined;
+  if (!sheet) throw new Error(`Worksheet not found: ${sheetName ?? "workbook contains no sheets"}`);
+
+  const allRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+    header: 1,
+    defval: "",
+    blankrows: true,
+    raw: false,
+    dateNF: "yyyy-mm-dd",
+  });
+  const maxRows = 100;
+  const maxColumns = 40;
+  const rows = allRows.slice(0, maxRows).map((row) => row.slice(0, maxColumns).map((cell) => {
+    if (cell === null || cell === undefined) return "";
+    if (cell instanceof Date && !Number.isNaN(cell.getTime())) return cell.toISOString().slice(0, 10);
+    return String(cell);
+  }));
+
+  return {
+    sheetNames: workbook.SheetNames,
+    sheetName: selectedSheet,
+    rows,
+    totalRows: allRows.length,
+    truncated: allRows.length > maxRows || allRows.some((row) => row.length > maxColumns),
+  };
+}
+
 function getDriveFile(urlString: string) {
   const url = new URL(urlString);
   if (url.hostname !== "drive.google.com" && url.hostname !== "docs.google.com") {
@@ -102,7 +139,7 @@ async function importWorkbook(buffer: Buffer) {
     for (const row of rows) {
       if (!row.employeeId) continue;
       const existingType = employeeTypes.get(row.employeeId);
-      if (existingType) {
+      if (existingType && existingType !== category.name) {
         throw new Error(`Employee ${row.employeeId} appears in both the ${existingType} and ${category.name} worksheets`);
       }
       employeeTypes.set(row.employeeId, category.name);
