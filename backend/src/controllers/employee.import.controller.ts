@@ -79,8 +79,6 @@ const REQUIRED_FIELD_LABELS: Record<string, string> = {
   employeeId: "employee ID (EIS No.)",
   name: "employee name",
   designation: "designation",
-  dateOfBirth: "date of birth (DOB)",
-  dateOfJoining: "date of joining (DOJ/DOA)",
 };
 
 interface ParsedEmployeeRow {
@@ -91,8 +89,8 @@ interface ParsedEmployeeRow {
   designation?: string;
   department?: string;
   skill?: string;
-  dateOfBirth?: Date;
-  dateOfJoining?: Date;
+  dateOfBirth?: Date | null;
+  dateOfJoining?: Date | null;
   pmeDate?: Date | null;
   pmeExpiry?: Date | null;
   vtcDate?: Date | null;
@@ -251,7 +249,7 @@ function parseExcelDate(value: unknown, dateOrder: ExcelDateOrder = "DMY"): Date
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWorkbook?: boolean; employeeType?: ParsedEmployeeRow["employeeType"]; gradeFallback?: string } = {}): ParsedEmployeeRow[] {
+export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWorkbook?: boolean; employeeType?: ParsedEmployeeRow["employeeType"]; gradeFallback?: string; departmentFallback?: string } = {}): ParsedEmployeeRow[] {
   const rawRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
     header: 1,
     defval: null,
@@ -340,10 +338,10 @@ export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWork
           parsedRow.skill = cellToText(trimmed);
           break;
         case "dateOfBirth":
-          parsedRow.dateOfBirth = parseExcelDate(trimmed, dateOrderByColumn[columnIndex]) ?? undefined;
+          parsedRow.dateOfBirth = parseExcelDate(trimmed, dateOrderByColumn[columnIndex]);
           break;
         case "dateOfJoining":
-          parsedRow.dateOfJoining = parseExcelDate(trimmed, dateOrderByColumn[columnIndex]) ?? undefined;
+          parsedRow.dateOfJoining = parseExcelDate(trimmed, dateOrderByColumn[columnIndex]);
           break;
         case "pmeDate":
           parsedRow.pmeDate = parseExcelDate(trimmed, dateOrderByColumn[columnIndex]);
@@ -376,7 +374,7 @@ export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWork
           break;
       }
     });
-    parsedRow.department = parsedRow.department || (isMonthlyRated ? "Monthly Rated Employees" : "Daily Rated Workers");
+    parsedRow.department = parsedRow.department || options.departmentFallback || (isMonthlyRated ? "Monthly Rated" : "Daily Rated");
     parsedRow.skill = parsedRow.skill || parsedRow.designation || "General Duty";
     parsedRow.relay = parsedRow.relay || "RELAY_A";
     parsedRow.grade = parsedRow.grade ?? options.gradeFallback ?? null;
@@ -407,11 +405,11 @@ export function validateParsedRows(rows: ParsedEmployeeRow[]): ImportError[] {
     if (!row.skill) {
       errors.push({ row: rowIndex, employeeId: row.employeeId, field: "Skill", error: "Skill is required" });
     }
-    if (!row.dateOfBirth) {
-      errors.push({ row: rowIndex, employeeId: row.employeeId, field: "DOB", error: "DOB is required and must be a valid date" });
+    if (row.dateOfBirth === null) {
+      errors.push({ row: rowIndex, employeeId: row.employeeId, field: "DOB", error: "DOB must be a valid date when provided" });
     }
-    if (!row.dateOfJoining) {
-      errors.push({ row: rowIndex, employeeId: row.employeeId, field: "DOA", error: "DOA is required and must be a valid date" });
+    if (row.dateOfJoining === null) {
+      errors.push({ row: rowIndex, employeeId: row.employeeId, field: "DOA", error: "DOA must be a valid date when provided" });
     }
     if (!row.relay) {
       errors.push({ row: rowIndex, employeeId: row.employeeId, field: "Relay", error: "Relay is required and must be Relay A, Relay B, or Relay C" });
@@ -457,7 +455,7 @@ export function validateParsedRows(rows: ParsedEmployeeRow[]): ImportError[] {
 export function rowToEmployeeData(row: ParsedEmployeeRow) {
   const pmeDate = row.pmeDate ?? null;
   const vtcDate = row.employeeType !== "MONTHLY_RATED" && row.employeeType !== "STAFF" && row.employeeType !== "EXECUTIVE" ? row.vtcDate ?? null : null;
-  const pmeExpiry = row.pmeExpiry ?? (pmeDate ? calculatePmeDueDate(row.dateOfBirth!, pmeDate) : null);
+  const pmeExpiry = row.pmeExpiry ?? (pmeDate && row.dateOfBirth ? calculatePmeDueDate(row.dateOfBirth, pmeDate) : null);
   const vtcExpiry = row.vtcExpiry ?? (vtcDate ? calculateVtcDueDate(vtcDate) : null);
   return {
     employeeId: row.employeeId!.trim(),
@@ -467,8 +465,8 @@ export function rowToEmployeeData(row: ParsedEmployeeRow) {
     grade: row.grade?.trim() || null,
     department: row.department!.trim(),
     skill: row.skill!.trim(),
-    dateOfBirth: row.dateOfBirth!,
-    dateOfJoining: row.dateOfJoining!,
+    dateOfBirth: row.dateOfBirth ?? null,
+    dateOfJoining: row.dateOfJoining ?? null,
     pmeDate,
     pmeExpiry,
     vtcDate,

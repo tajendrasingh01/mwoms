@@ -30,6 +30,13 @@ native Google Sheets are supported. Configure the URL in the Render dashboard
 after creating the share link. The app checks the workbook on startup and every
 five minutes; admins can also choose **Sync now** on the Employee Master page.
 
+Each employee row needs an ID, name, and designation. DOB and joining date are
+optional. The worksheet name determines employee type, grade, and department
+(`DR` becomes Daily Rated, `MR` becomes Monthly Rated, and `SURFACE DR` becomes
+Surface DR); skill is copied from designation. Experience and due-date columns
+are not required. VTC due dates are calculated from the VTC date. PME due dates
+use the existing DOB-based rule and remain unset when DOB is missing.
+
 **Security warning:** Anyone who gets this link can read the workbook,
 including employee personal information. Only enable public link access if
 your organization's data-protection policy permits it.

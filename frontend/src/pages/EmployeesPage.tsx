@@ -304,7 +304,7 @@ export function EmployeesPage() {
                         {employee.employeeType === "DAILY_RATED" ? "DR" : employee.employeeType === "SURFACE_DR" ? "Surface DR" : employee.employeeType === "MONTHLY_RATED" ? "MR" : employee.employeeType === "EXECUTIVE" ? "Executive" : "Staff"}
                       </Badge>
                     </TableCell>
-                    <TableCell>{employee.age}</TableCell>
+                    <TableCell>{employee.age ?? "—"}</TableCell>
                     <TableCell>{employee.designation}</TableCell>
                     <TableCell>{employee.grade ? `${employee.grade} / ` : ""}{employee.department}</TableCell>
                     <TableCell>{employee.experienceYrs} yrs</TableCell>

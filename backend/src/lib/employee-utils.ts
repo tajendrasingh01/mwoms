@@ -21,8 +21,8 @@ export function calculateAgeAt(dateOfBirth: Date, onDate: Date): number {
   return age;
 }
 
-export function isRetired(dateOfBirth: Date): boolean {
-  return calculateAge(dateOfBirth) >= 60;
+export function isRetired(dateOfBirth: Date | null | undefined): boolean {
+  return dateOfBirth ? calculateAge(dateOfBirth) >= 60 : false;
 }
 
 function addYears(date: Date, years: number): Date {
@@ -64,7 +64,7 @@ export function getExpiryStatus(expiry: Date | null): ExpiryStatus {
 }
 
 export function getDueStatusForEmployee(dateOfBirth: Date | null | undefined, expiry: Date | null): ExpiryStatus {
-  if (!dateOfBirth || isRetired(dateOfBirth)) {
+  if (dateOfBirth && isRetired(dateOfBirth)) {
     return expiry ? "VALID" : "NOT_SET";
   }
   return getExpiryStatus(expiry);
@@ -92,14 +92,14 @@ export function serializeEmployee(employee: Employee) {
     employeeId: employee.employeeId,
     name: employee.name,
     fatherName: employee.fatherName ?? null,
-    dateOfBirth: employee.dateOfBirth.toISOString(),
-    age: calculateAge(employee.dateOfBirth),
+    dateOfBirth: employee.dateOfBirth?.toISOString() ?? null,
+    age: employee.dateOfBirth ? calculateAge(employee.dateOfBirth) : null,
     experienceYrs: Number(employee.experienceYrs),
     designation: employee.designation,
     grade: employee.grade,
     department: employee.department,
     skill: employee.skill,
-    dateOfJoining: employee.dateOfJoining.toISOString(),
+    dateOfJoining: employee.dateOfJoining?.toISOString() ?? null,
     pmeDate: employee.pmeDate?.toISOString() ?? null,
     pmeExpiry: employee.pmeExpiry?.toISOString() ?? null,
     pmeDaysLeft: getDaysLeft(employee.pmeExpiry),

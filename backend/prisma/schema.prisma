@@ -80,13 +80,13 @@ model Employee {
   employeeId        String   @unique
   name              String
   fatherName        String?
-  dateOfBirth       DateTime
+  dateOfBirth       DateTime?
   experienceYrs     Decimal  @db.Decimal(4, 1)
   designation       String
   grade             String?
   department        String
   skill             String
-  dateOfJoining     DateTime
+  dateOfJoining     DateTime?
   pmeDate           DateTime?
   pmeExpiry         DateTime?
   vtcDate           DateTime?

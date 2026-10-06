@@ -6,14 +6,14 @@ export interface Employee {
   employeeId: string;
   name: string;
   fatherName: string | null;
-  dateOfBirth: string;
-  age: number;
+  dateOfBirth: string | null;
+  age: number | null;
   experienceYrs: number;
   designation: string;
   grade: string | null;
   department: string;
   skill: string;
-  dateOfJoining: string;
+  dateOfJoining: string | null;
   pmeDate: string | null;
   pmeExpiry: string | null;
   pmeDaysLeft: number | null;

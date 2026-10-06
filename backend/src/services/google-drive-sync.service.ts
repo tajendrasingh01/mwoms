@@ -2,6 +2,7 @@ import XLSX from "xlsx";
 
 import { env } from "@/config/env";
 import { prisma } from "@/lib/prisma";
+import { calculatePmeDueDate } from "@/lib/employee-utils";
 import { parseWorksheetRows, rowToEmployeeData, validateParsedRows } from "@/controllers/employee.import.controller";
 
 type SyncStatus = {
@@ -71,16 +72,24 @@ async function importWorkbook(buffer: Buffer) {
     throw new Error("Google Drive file could not be read as an Excel workbook. Check that it is an .xlsx file or a Google Sheet.");
   }
   const categories = [
-    { name: "DR", aliases: ["DR", "DAILY RATED", "DAILY RATED WORKERS"], employeeType: "DAILY_RATED" as const },
-    { name: "MR", aliases: ["MR", "MONTHLY RATED", "MONTHLY RATED EMPLOYEES"], employeeType: "MONTHLY_RATED" as const },
-    { name: "SURFACE DR", aliases: ["SURFACE DR", "SURFACE DAILY RATED", "SURFACE DAILY RATED WORKERS"], employeeType: "SURFACE_DR" as const },
+    { name: "DR", aliases: ["DR", "DAILY RATED", "DAILY RATED WORKERS"], employeeType: "DAILY_RATED" as const, department: "Daily Rated" },
+    { name: "MR", aliases: ["MR", "MONTHLY RATED", "MONTHLY RATED EMPLOYEES"], employeeType: "MONTHLY_RATED" as const, department: "Monthly Rated" },
+    { name: "SURFACE DR", aliases: ["SURFACE DR", "SURFACE DAILY RATED", "SURFACE DAILY RATED WORKERS"], employeeType: "SURFACE_DR" as const, department: "Surface DR" },
   ];
   const sheetsByName = new Map(workbook.SheetNames.map((name) => [name.trim().toUpperCase().replace(/\s+/g, " "), name]));
   const parsedRows = categories.map((category) => {
     const sheetName = category.aliases.map((alias) => sheetsByName.get(alias)).find(Boolean);
     const sheet = sheetName ? workbook.Sheets[sheetName] : undefined;
     if (!sheet) throw new Error(`Workbook is missing the ${category.name} worksheet. Found: ${workbook.SheetNames.join(", ") || "no worksheets"}.`);
-    const rows = parseWorksheetRows(sheet, { employeeType: category.employeeType, gradeFallback: category.name });
+    const rows = parseWorksheetRows(sheet, { employeeType: category.employeeType, gradeFallback: category.name, departmentFallback: category.department })
+      .map((row) => ({
+        ...row,
+        grade: category.name,
+        department: category.department,
+        skill: row.designation || "General Duty",
+        pmeExpiry: undefined,
+        vtcExpiry: undefined,
+      }));
     return { category, rows, errors: validateParsedRows(rows) };
   });
   const errors = parsedRows.flatMap(({ errors: sheetErrors }) => sheetErrors);
@@ -105,9 +114,20 @@ async function importWorkbook(buffer: Buffer) {
   await prisma.$transaction(async (tx) => {
     for (const row of validRows) {
       const data = rowToEmployeeData(row);
-      const existing = await tx.employee.findUnique({ where: { employeeId: data.employeeId }, select: { id: true } });
+      const existing = await tx.employee.findUnique({ where: { employeeId: data.employeeId }, select: { id: true, dateOfBirth: true, dateOfJoining: true } });
       if (existing) {
-        await tx.employee.update({ where: { id: existing.id }, data: { ...data, experienceYrs: undefined, isActive: undefined } });
+        const dateOfBirth = data.dateOfBirth ?? existing.dateOfBirth;
+        await tx.employee.update({
+          where: { id: existing.id },
+          data: {
+            ...data,
+            dateOfBirth,
+            dateOfJoining: data.dateOfJoining ?? existing.dateOfJoining,
+            pmeExpiry: data.pmeDate && dateOfBirth ? calculatePmeDueDate(dateOfBirth, data.pmeDate) : null,
+            experienceYrs: undefined,
+            isActive: undefined,
+          },
+        });
         updated += 1;
       } else {
         await tx.employee.create({ data });
