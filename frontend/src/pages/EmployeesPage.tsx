@@ -33,6 +33,7 @@ interface GoogleDriveStatus {
   lastResult: {
     added: number;
     updated: number;
+    deactivated: number;
     skipped: number;
     errors: number;
     conflicts: { employeeId: string; occurrences: { sheet: string; row: number }[] }[];
