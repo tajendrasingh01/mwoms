@@ -264,7 +264,7 @@ export function parseWorksheetRows(sheet: XLSX.WorkSheet, options: { surfaceWork
   });
 
   if (rawRows.length === 0) {
-    return [];
+    throw new Error("Worksheet is empty and has no employee header row.");
   }
 
   let headerRowIndex = 0;

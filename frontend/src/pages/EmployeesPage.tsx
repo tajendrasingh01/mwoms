@@ -96,7 +96,7 @@ export function EmployeesPage() {
   const [relay, setRelay] = useState<"" | "RELAY_A" | "RELAY_B" | "RELAY_C">("");
   const [pmeStatus, setPmeStatus] = useState<"" | "Expired" | "DUE TODAY" | "VALID" | "NOT_SET">("");
   const [vtcStatus, setVtcStatus] = useState<"" | "Expired" | "DUE TODAY" | "VALID" | "NOT_SET" | "N/A">("");
-  const [activeFilter, setActiveFilter] = useState<"" | "true" | "false">("");
+  const [activeFilter, setActiveFilter] = useState<"" | "true" | "false">("true");
   const [employmentStatus, setEmploymentStatus] = useState<"" | EmploymentStatus>("");
   const [isExporting, setIsExporting] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -282,7 +282,7 @@ export function EmployeesPage() {
           ) : googleDriveStatus.data.connected ? (
             <span className="text-muted-foreground">
               Connected{googleDriveStatus.data.lastSyncAt ? ` · Last sync ${new Date(googleDriveStatus.data.lastSyncAt).toLocaleString()}` : " · Waiting for first sync"}
-              {googleDriveStatus.data.lastResult ? ` · ${googleDriveStatus.data.lastResult.updated} updated, ${googleDriveStatus.data.lastResult.added} added` : ""}
+              {googleDriveStatus.data.lastResult ? ` · ${googleDriveStatus.data.lastResult.updated} updated, ${googleDriveStatus.data.lastResult.added} added, ${googleDriveStatus.data.lastResult.deactivated} removed` : ""}
               {googleDriveStatus.data.lastResult && (googleDriveStatus.data.lastResult.errors > 0 || (googleDriveStatus.data.lastResult.conflicts?.length ?? 0) > 0) ? ` · ${googleDriveStatus.data.lastResult.skipped} skipped, ${googleDriveStatus.data.lastResult.errors} validation issues, ${googleDriveStatus.data.lastResult.conflicts?.length ?? 0} cross-sheet ID conflicts` : ""}
             </span>
           ) : (

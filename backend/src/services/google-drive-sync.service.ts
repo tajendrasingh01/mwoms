@@ -288,7 +288,7 @@ async function importWorkbook(buffer: Buffer) {
         dateOfJoining: data.dateOfJoining ?? existing.dateOfJoining,
         pmeExpiry: data.pmeDate && dateOfBirth ? calculatePmeDueDate(dateOfBirth, data.pmeDate) : null,
         experienceYrs: undefined,
-        isActive: undefined,
+        isActive: true,
       },
     });
   }
@@ -311,8 +311,23 @@ async function importWorkbook(buffer: Buffer) {
     updated += batch.length;
   }
 
+  let deactivated = 0;
+  for (const { category, rows } of parsedRows) {
+    if (rows.some((row) => !row.employeeId)) continue;
+    const sourceEmployeeIds = [...new Set(rows.map((row) => row.employeeId!))];
+    const result = await prisma.employee.updateMany({
+      where: {
+        employeeType: category.employeeType,
+        isActive: true,
+        ...(sourceEmployeeIds.length ? { employeeId: { notIn: sourceEmployeeIds } } : {}),
+      },
+      data: { isActive: false },
+    });
+    deactivated += result.count;
+  }
+
   const skipped = parsedRows.reduce((total, { errors: sheetErrors }) => total + new Set(sheetErrors.map((error) => error.row)).size, 0);
-  return { added, updated, skipped: skipped + conflicts.reduce((total, conflict) => total + conflict.occurrences.length, 0), errors: errors.length, conflicts };
+  return { added, updated, deactivated, skipped: skipped + conflicts.reduce((total, conflict) => total + conflict.occurrences.length, 0), errors: errors.length, conflicts };
 }
 
 export async function correctGoogleDriveEmployeeRow(input: { sheetName: string; sourceRow: number; values: unknown }) {
