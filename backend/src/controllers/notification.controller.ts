@@ -7,7 +7,6 @@ import {
   calculateVtcDueDate,
   getDaysUntil,
   getExpiryStatus,
-  isRetired,
 } from "@/lib/employee-utils";
 
 export interface ExpiryNotification {
@@ -25,8 +24,7 @@ function buildNotifications(employees: Employee[]): ExpiryNotification[] {
   const notifications: ExpiryNotification[] = [];
 
   for (const employee of employees) {
-    const retired = isRetired(employee.dateOfBirth);
-    const pmeExpiry = !retired && employee.dateOfBirth && employee.pmeDate
+    const pmeExpiry = employee.dateOfBirth && employee.pmeDate
       ? calculatePmeDueDate(employee.dateOfBirth, employee.pmeDate)
       : null;
     const pmeStatus = getExpiryStatus(pmeExpiry);

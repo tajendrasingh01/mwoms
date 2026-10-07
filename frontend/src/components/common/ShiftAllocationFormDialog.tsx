@@ -100,7 +100,7 @@ function ShiftAllocationForm({
   const excludeIds = new Set(assigned.map((a) => a.employee.id));
 
   const overdueCount = assigned.filter(
-    (a) => a.employee.pmeStatus === "OVERDUE" || a.employee.vtcStatus === "OVERDUE",
+    (a) => a.employee.pmeStatus === "Expired" || a.employee.vtcStatus === "Expired",
   ).length;
   const dueSoonCount = assigned.filter(
     (a) =>

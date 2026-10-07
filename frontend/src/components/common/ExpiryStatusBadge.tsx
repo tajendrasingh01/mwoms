@@ -5,11 +5,10 @@ const STATUS_CONFIG: Record<
   PmeStatus | VtcStatus,
   { label: string; variant: "success" | "warning" | "danger" | "secondary" }
 > = {
-  VALID: { label: "Valid", variant: "success" },
-  "DUE TODAY": { label: "Due today", variant: "warning" },
-  OVERDUE: { label: "Overdue", variant: "danger" },
+  VALID: { label: "VALID", variant: "success" },
+  "DUE TODAY": { label: "DUE TODAY", variant: "warning" },
+  Expired: { label: "Expired", variant: "danger" },
   NOT_SET: { label: "Not set", variant: "secondary" },
-  RETIRED: { label: "Retired", variant: "secondary" },
   "N/A": { label: "N/A", variant: "secondary" },
 };
 

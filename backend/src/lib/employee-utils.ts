@@ -12,19 +12,6 @@ export function calculateAge(dateOfBirth: Date): number {
   return age;
 }
 
-export function calculateAgeAt(dateOfBirth: Date, onDate: Date): number {
-  let age = onDate.getFullYear() - dateOfBirth.getFullYear();
-  const hadBirthday =
-    onDate.getMonth() > dateOfBirth.getMonth() ||
-    (onDate.getMonth() === dateOfBirth.getMonth() && onDate.getDate() >= dateOfBirth.getDate());
-  if (!hadBirthday) age -= 1;
-  return age;
-}
-
-export function isRetired(dateOfBirth: Date | null | undefined): boolean {
-  return dateOfBirth ? calculateAge(dateOfBirth) >= 60 : false;
-}
-
 function addYears(date: Date, years: number): Date {
   const result = new Date(date);
   result.setFullYear(result.getFullYear() + years);
@@ -32,10 +19,8 @@ function addYears(date: Date, years: number): Date {
 }
 
 export function calculatePmeDueDate(dateOfBirth: Date, pmeDate: Date): Date | null {
-  if (isRetired(dateOfBirth)) return null;
-  const ageAtPme = calculateAgeAt(dateOfBirth, pmeDate);
-  if (ageAtPme >= 60) return null;
-  const frequencyYears = ageAtPme < 45 ? 5 : 3;
+  const age = calculateAge(dateOfBirth);
+  const frequencyYears = age < 45 ? 5 : 3;
   return addYears(pmeDate, frequencyYears);
 }
 
@@ -46,8 +31,8 @@ export function calculateVtcDueDate(vtcDate: Date): Date {
 const EXPIRY_WARNING_WINDOW_DAYS = 30;
 
 export type ExpiryStatus = "EXPIRED" | "DUE_SOON" | "VALID" | "NOT_SET";
-export type CertificationStatus = "OVERDUE" | "DUE TODAY" | "VALID" | "NOT_SET";
-export type PmeStatus = CertificationStatus | "RETIRED";
+export type CertificationStatus = "Expired" | "DUE TODAY" | "VALID" | "NOT_SET";
+export type PmeStatus = CertificationStatus;
 export type VtcStatus = CertificationStatus | "N/A";
 
 function getCertificationStatus(expiry: Date | null): CertificationStatus {
@@ -57,13 +42,12 @@ function getCertificationStatus(expiry: Date | null): CertificationStatus {
   const tomorrow = new Date(today);
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 
-  if (expiry < today) return "OVERDUE";
+  if (expiry < today) return "Expired";
   if (expiry < tomorrow) return "DUE TODAY";
   return "VALID";
 }
 
-export function getPmeStatus(dateOfBirth: Date | null | undefined, expiry: Date | null): PmeStatus {
-  if (dateOfBirth && isRetired(dateOfBirth)) return "RETIRED";
+export function getPmeStatus(expiry: Date | null): PmeStatus {
   return getCertificationStatus(expiry);
 }
 
@@ -102,7 +86,7 @@ export function getDaysLeft(date: Date | null): number | null {
  */
 export function serializeEmployee(employee: Employee) {
   const pmeExpiry =
-    !isRetired(employee.dateOfBirth) && employee.dateOfBirth && employee.pmeDate
+    employee.dateOfBirth && employee.pmeDate
       ? calculatePmeDueDate(employee.dateOfBirth, employee.pmeDate)
       : null;
   const vtcDate = employee.employeeType === "DAILY_RATED" ? employee.vtcDate : null;
@@ -124,7 +108,7 @@ export function serializeEmployee(employee: Employee) {
     pmeDate: employee.pmeDate?.toISOString() ?? null,
     pmeExpiry: pmeExpiry?.toISOString() ?? null,
     pmeDaysLeft: getDaysLeft(pmeExpiry),
-    pmeStatus: getPmeStatus(employee.dateOfBirth, pmeExpiry),
+    pmeStatus: getPmeStatus(pmeExpiry),
     vtcDate: vtcDate?.toISOString() ?? null,
     vtcExpiry: vtcExpiry?.toISOString() ?? null,
     vtcDaysLeft: getDaysLeft(vtcExpiry),

@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 
 import { prisma } from "@/lib/prisma";
-import { calculatePmeDueDate, calculateVtcDueDate, getExpiryStatus, isRetired } from "@/lib/employee-utils";
+import { calculatePmeDueDate, calculateVtcDueDate, getExpiryStatus } from "@/lib/employee-utils";
 import { serializeShiftAllocation } from "@/lib/shift-allocation-utils";
 import { serializeEmployee } from "@/lib/employee-utils";
 import { SHIFT_TYPES, SHIFT_SCHEDULE, type ShiftTypeValue } from "@/constants/shift-schedule";
@@ -69,13 +69,11 @@ export async function getDashboardSummary(_req: Request, res: Response) {
   ]);
 
   const pmeDueSoon = employees.filter((e) => {
-    if (isRetired(e.dateOfBirth)) return false;
     const expiry = e.dateOfBirth && e.pmeDate ? calculatePmeDueDate(e.dateOfBirth, e.pmeDate) : null;
     const s = getExpiryStatus(expiry);
     return s === "DUE_SOON";
   }).length;
   const pmeExpired = employees.filter((e) => {
-    if (isRetired(e.dateOfBirth)) return false;
     const expiry = e.dateOfBirth && e.pmeDate ? calculatePmeDueDate(e.dateOfBirth, e.pmeDate) : null;
     return getExpiryStatus(expiry) === "EXPIRED";
   }).length;
@@ -135,7 +133,6 @@ export async function getComplianceEmployees(req: Request, res: Response) {
   });
 
   const filtered = employees
-    .filter((employee) => type === "vtc" || !isRetired(employee.dateOfBirth))
     .map((employee) => {
       const expiry = type === "pme"
         ? employee.dateOfBirth && employee.pmeDate ? calculatePmeDueDate(employee.dateOfBirth, employee.pmeDate) : null

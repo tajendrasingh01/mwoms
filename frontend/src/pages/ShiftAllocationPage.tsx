@@ -148,7 +148,7 @@ export function ShiftAllocationPage() {
                                 )}
                               </span>
                               <span className="hidden text-[11px] text-muted-foreground xl:inline">
-                                PME {displayDate(a.employee.pmeDate)} → {displayDate(a.employee.pmeExpiry)} ({a.employee.pmeDaysLeft ?? "—"}d) · VTC {displayDate(a.employee.vtcDate)} → {displayDate(a.employee.vtcExpiry)} ({a.employee.vtcDaysLeft ?? "—"}d)
+                                PME {displayDate(a.employee.pmeDate)} → {displayDate(a.employee.pmeExpiry)} ({a.employee.pmeDaysLeft ?? "—"}d) · VTC {a.employee.employeeType === "DAILY_RATED" ? `${displayDate(a.employee.vtcDate)} → ${displayDate(a.employee.vtcExpiry)} (${a.employee.vtcDaysLeft ?? "—"}d)` : "N/A"}
                               </span>
                               <span className="flex shrink-0 gap-1">
                                 <ExpiryStatusBadge status={a.employee.pmeStatus} />

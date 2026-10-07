@@ -27,12 +27,12 @@ export function EmployeeSearchPicker({ excludeIds, onAdd }: EmployeeSearchPicker
     // The requirement's "popup" for expired credentials — a hard stop
     // that requires explicit acknowledgment before assigning someone
     // whose PME or VTC has actually expired.
-    const pmeOverdue = employee.pmeStatus === "OVERDUE" || employee.pmeStatus === "DUE TODAY";
-    const vtcOverdue = employee.vtcStatus === "OVERDUE" || employee.vtcStatus === "DUE TODAY";
-    if (pmeOverdue || vtcOverdue) {
+    const pmeNeedsAttention = employee.pmeStatus === "Expired" || employee.pmeStatus === "DUE TODAY";
+    const vtcNeedsAttention = employee.vtcStatus === "Expired" || employee.vtcStatus === "DUE TODAY";
+    if (pmeNeedsAttention || vtcNeedsAttention) {
       const issues = [
-        pmeOverdue ? "PME" : null,
-        vtcOverdue ? "VTC" : null,
+        pmeNeedsAttention ? "PME" : null,
+        vtcNeedsAttention ? "VTC" : null,
       ]
         .filter(Boolean)
         .join(" and ");

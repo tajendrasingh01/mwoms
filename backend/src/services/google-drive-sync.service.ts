@@ -143,7 +143,7 @@ export async function previewGoogleDriveEmployeeMaster(sheetName?: string, emplo
       pmeDate: dateToPreview(row.pmeDate),
       pmeDue: dateToPreview(row.pmeDate && row.dateOfBirth ? calculatePmeDueDate(row.dateOfBirth, row.pmeDate) : null),
       vtcDate: category.employeeType === "DAILY_RATED" ? dateToPreview(row.vtcDate) : "",
-      vtcDue: category.employeeType === "DAILY_RATED" ? dateToPreview(row.vtcDate ? calculateVtcDueDate(row.vtcDate) : null) : "",
+      vtcDue: category.employeeType === "DAILY_RATED" ? dateToPreview(row.vtcDate ? calculateVtcDueDate(row.vtcDate) : null) : "N/A",
       relay: row.relay?.replace("RELAY_", "Relay ") ?? "Relay A",
       issues: errorsByRow.get(row.rowIndex) ?? [],
     }));

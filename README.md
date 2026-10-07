@@ -35,11 +35,12 @@ optional. The worksheet name determines employee type, grade, and department
 (`DR` becomes Daily Rated, `MR` becomes Monthly Rated, and `SURFACE DR` becomes
 Surface DR); skill is copied from designation. Experience and due-date columns
 are not required. VTC applies only to DR employees and is due four years after
-the last VTC date; MR and Surface DR VTC status is N/A, and a blank VTC date
-stays blank. PME due dates are based on age at the last PME: under 45, add five
-years; ages 45–59, add three years. Employees currently aged 60 or older are
-retired for PME and have no PME due date. PME due dates remain unset when DOB
-or the last PME date is missing.
+the last VTC date; MR and Surface DR VTC due dates are N/A, and a blank VTC date
+stays blank. PME due dates use the employee's current age: under 45, add five
+years to the last PME date; age 45 or older, add three years. PME due dates
+remain unset when DOB or the last PME date is missing. Certification status is
+Expired when the due date is before today, DUE TODAY when it is today, and VALID
+when it is later.
 
 **Security warning:** Anyone who gets this link can read the workbook,
 including employee personal information. Only enable public link access if

@@ -1,5 +1,5 @@
-export type CertificationStatus = "OVERDUE" | "DUE TODAY" | "VALID" | "NOT_SET";
-export type PmeStatus = CertificationStatus | "RETIRED";
+export type CertificationStatus = "Expired" | "DUE TODAY" | "VALID" | "NOT_SET";
+export type PmeStatus = CertificationStatus;
 export type VtcStatus = CertificationStatus | "N/A";
 export type EmploymentStatus = "ACTIVE" | "TRANSFERRED" | "NOT_ENROLLED";
 
