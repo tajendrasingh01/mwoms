@@ -164,8 +164,16 @@ export async function previewGoogleDriveEmployeeMaster(sheetName?: string, emplo
     }
   }
 
+  const issueRows = cleanRows.filter((row) => row.issues.length > 0);
   const query = employeeIdQuery?.trim().toLowerCase();
-  const matchedRows = query ? cleanRows.filter((row) => row.employeeId.toLowerCase().includes(query)) : cleanRows;
+  const matchedRows = query ? issueRows.filter((row) => row.employeeId.toLowerCase().includes(query)) : issueRows;
+  const crossSheetConflictIds = new Set(
+    issueRows
+      .filter((row) => row.issues.some((issue) => issue.startsWith("Employee ID also appears in")))
+      .map((row) => row.employeeId)
+      .filter(Boolean),
+  );
+  const validationIssueCount = issueRows.reduce((count, row) => count + row.issues.filter((issue) => !issue.startsWith("Employee ID also appears in")).length, 0);
   const maxRows = 100;
 
   return {
@@ -173,7 +181,10 @@ export async function previewGoogleDriveEmployeeMaster(sheetName?: string, emplo
     sheetName: sheetName ?? "ALL",
     rows: matchedRows.slice(0, maxRows),
     totalRows: cleanRows.length,
+    issueRows: issueRows.length,
     matchedRows: matchedRows.length,
+    validationIssueCount,
+    crossSheetConflictCount: crossSheetConflictIds.size,
     truncated: matchedRows.length > maxRows,
   };
 }

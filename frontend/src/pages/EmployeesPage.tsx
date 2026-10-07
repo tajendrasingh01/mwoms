@@ -67,7 +67,10 @@ interface GoogleDrivePreview {
   sheetName: string;
   rows: GoogleDrivePreviewRow[];
   totalRows: number;
+  issueRows: number;
   matchedRows: number;
+  validationIssueCount: number;
+  crossSheetConflictCount: number;
   truncated: boolean;
 }
 
@@ -338,7 +341,9 @@ export function EmployeesPage() {
                     />
                   </div>
                   <span className="text-xs text-muted-foreground">
-                    {previewSearch ? `${googleDrivePreview.data.matchedRows} matching rows` : `Showing ${googleDrivePreview.data.rows.length} of ${googleDrivePreview.data.totalRows} rows`}{googleDrivePreview.data.truncated ? " · first 100 matches shown" : ""}
+                    {previewSearch ? `${googleDrivePreview.data.matchedRows} matching issue rows` : `${googleDrivePreview.data.issueRows} issue rows`}
+                    {` · ${googleDrivePreview.data.validationIssueCount} validation issues · ${googleDrivePreview.data.crossSheetConflictCount} cross-sheet ID conflicts`}
+                    {googleDrivePreview.data.truncated ? " · first 100 matches shown" : ""}
                   </span>
                 </div>
                 {savePreviewCorrection.error && (
@@ -396,7 +401,7 @@ export function EmployeesPage() {
                         </tr>
                       ))}
                       {googleDrivePreview.data.rows.length === 0 && (
-                        <tr><td colSpan={19} className="px-3 py-8 text-center text-muted-foreground">No employee rows match this search.</td></tr>
+                        <tr><td colSpan={19} className="px-3 py-8 text-center text-muted-foreground">{previewSearch ? "No issue rows match this employee number." : "No skipped or invalid rows in this worksheet."}</td></tr>
                       )}
                     </tbody>
                   </table>
