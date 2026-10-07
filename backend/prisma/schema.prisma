@@ -111,6 +111,18 @@ model Employee {
   @@map("employees")
 }
 
+model EmployeeImportCorrection {
+  id        String   @id @default(cuid())
+  sheetName String
+  sourceRow Int
+  values    Json     @db.JsonB
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sheetName, sourceRow])
+  @@map("employee_import_corrections")
+}
+
 enum CertificationType {
   PME
   VTC

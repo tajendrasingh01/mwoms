@@ -1,5 +1,6 @@
 import XLSX from "xlsx";
 import type { Prisma } from "@prisma/client";
+import { z } from "zod";
 
 import { env } from "@/config/env";
 import { prisma } from "@/lib/prisma";
@@ -14,6 +15,27 @@ const EMPLOYEE_CATEGORIES = [
 
 type EmployeeCategory = typeof EMPLOYEE_CATEGORIES[number];
 type WorkbookConflict = { employeeId: string; occurrences: { sheet: string; row: number }[] };
+type EmployeeCorrectionValues = {
+  employeeId: string;
+  name: string;
+  designation: string;
+  dateOfBirth: string | null;
+  dateOfJoining: string | null;
+  pmeDate: string | null;
+  vtcDate: string | null;
+  relay: "RELAY_A" | "RELAY_B" | "RELAY_C";
+};
+
+const correctionValuesSchema = z.object({
+  employeeId: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+  designation: z.string().trim().min(1),
+  dateOfBirth: z.string().date().nullable(),
+  dateOfJoining: z.string().date().nullable(),
+  pmeDate: z.string().date().nullable(),
+  vtcDate: z.string().date().nullable(),
+  relay: z.enum(["RELAY_A", "RELAY_B", "RELAY_C"]),
+});
 
 type SyncStatus = {
   configured: boolean;
@@ -39,19 +61,38 @@ function normalizeSheetName(value: string): string {
   return value.trim().toUpperCase().replace(/\s+/g, " ");
 }
 
-function parseCategoryRows(sheet: XLSX.WorkSheet, category: EmployeeCategory) {
-  return parseWorksheetRows(sheet, {
+async function parseCategoryRows(sheet: XLSX.WorkSheet, category: EmployeeCategory) {
+  const rows = parseWorksheetRows(sheet, {
     employeeType: category.employeeType,
     gradeFallback: category.name,
     departmentFallback: category.department,
-  }).map((row) => ({
-    ...row,
-    grade: category.name,
-    department: category.department,
-    skill: row.designation || "General Duty",
-    pmeExpiry: undefined,
-    vtcExpiry: undefined,
-  }));
+  });
+  const corrections = await prisma.employeeImportCorrection.findMany({
+    where: { sheetName: category.name, sourceRow: { in: rows.map((row) => row.rowIndex) } },
+  });
+  const correctionsByRow = new Map(corrections.map((correction) => [correction.sourceRow, correction.values as EmployeeCorrectionValues]));
+  return rows.map((row) => {
+    const correction = correctionsByRow.get(row.rowIndex);
+    return {
+      ...row,
+      ...(correction ? {
+        employeeId: correction.employeeId,
+        name: correction.name,
+        designation: correction.designation,
+        dateOfBirth: correction.dateOfBirth ? new Date(`${correction.dateOfBirth}T00:00:00.000Z`) : null,
+        dateOfJoining: correction.dateOfJoining ? new Date(`${correction.dateOfJoining}T00:00:00.000Z`) : null,
+        pmeDate: correction.pmeDate ? new Date(`${correction.pmeDate}T00:00:00.000Z`) : null,
+        vtcDate: correction.vtcDate ? new Date(`${correction.vtcDate}T00:00:00.000Z`) : null,
+        relay: correction.relay,
+      } : {}),
+      grade: category.name,
+      department: category.department,
+      skill: correction?.designation ?? row.designation ?? "General Duty",
+      pmeExpiry: undefined,
+      vtcExpiry: undefined,
+      corrected: !!correction,
+    };
+  });
 }
 
 function workbookFromBuffer(buffer: Buffer): XLSX.WorkBook {
@@ -74,11 +115,11 @@ export async function previewGoogleDriveEmployeeMaster(sheetName?: string, emplo
     : EMPLOYEE_CATEGORIES;
   if (categories.length === 0) throw new Error(`Unsupported employee worksheet: ${sheetName}`);
 
-  const cleanRows = categories.flatMap((category) => {
+  const cleanRowsByCategory = await Promise.all(categories.map(async (category) => {
     const sourceSheetName = category.aliases.map((alias) => availableSheets.get(alias)).find(Boolean);
     const sheet = sourceSheetName ? workbook.Sheets[sourceSheetName] : undefined;
     if (!sheet || !sourceSheetName) throw new Error(`Workbook is missing the ${category.name} worksheet.`);
-    const parsedRows = parseCategoryRows(sheet, category);
+    const parsedRows = await parseCategoryRows(sheet, category);
     const errorsByRow = new Map<number, string[]>();
     for (const error of validateParsedRows(parsedRows)) {
       const rowErrors = errorsByRow.get(error.row) ?? [];
@@ -87,14 +128,16 @@ export async function previewGoogleDriveEmployeeMaster(sheetName?: string, emplo
     }
     return parsedRows.map((row) => ({
       sheet: sourceSheetName,
+      category: category.name,
       row: row.rowIndex,
+      corrected: row.corrected,
       employeeId: row.employeeId ?? "",
       name: row.name ?? "",
       employeeType: category.name,
       designation: row.designation ?? "",
       grade: category.name,
       department: category.department,
-      skill: row.designation || "General Duty",
+      skill: row.skill || "General Duty",
       dateOfBirth: dateToPreview(row.dateOfBirth),
       dateOfJoining: dateToPreview(row.dateOfJoining),
       pmeDate: dateToPreview(row.pmeDate),
@@ -104,7 +147,8 @@ export async function previewGoogleDriveEmployeeMaster(sheetName?: string, emplo
       relay: row.relay?.replace("RELAY_", "Relay ") ?? "Relay A",
       issues: errorsByRow.get(row.rowIndex) ?? [],
     }));
-  });
+  }));
+  const cleanRows = cleanRowsByCategory.flat();
   const conflicts = new Map<string, { sheet: string; row: number }[]>();
   for (const row of cleanRows) {
     if (!row.employeeId) continue;
@@ -176,13 +220,13 @@ function getDriveFile(urlString: string) {
 async function importWorkbook(buffer: Buffer) {
   const workbook = workbookFromBuffer(buffer);
   const sheetsByName = new Map(workbook.SheetNames.map((name) => [normalizeSheetName(name), name]));
-  const parsedRows = EMPLOYEE_CATEGORIES.map((category) => {
+  const parsedRows = await Promise.all(EMPLOYEE_CATEGORIES.map(async (category) => {
     const sheetName = category.aliases.map((alias) => sheetsByName.get(alias)).find(Boolean);
     const sheet = sheetName ? workbook.Sheets[sheetName] : undefined;
     if (!sheet) throw new Error(`Workbook is missing the ${category.name} worksheet. Found: ${workbook.SheetNames.join(", ") || "no worksheets"}.`);
-    const rows = parseCategoryRows(sheet, category);
+    const rows = await parseCategoryRows(sheet, category);
     return { category, rows, errors: validateParsedRows(rows) };
-  });
+  }));
   const errors = parsedRows.flatMap(({ errors: sheetErrors }) => sheetErrors);
   const validRows = parsedRows.flatMap(({ rows, errors: sheetErrors }) => {
     const invalidRows = new Set(sheetErrors.map((error) => error.row));
@@ -258,6 +302,23 @@ async function importWorkbook(buffer: Buffer) {
 
   const skipped = parsedRows.reduce((total, { errors: sheetErrors }) => total + new Set(sheetErrors.map((error) => error.row)).size, 0);
   return { added, updated, skipped: skipped + conflicts.reduce((total, conflict) => total + conflict.occurrences.length, 0), errors: errors.length, conflicts };
+}
+
+export async function correctGoogleDriveEmployeeRow(input: { sheetName: string; sourceRow: number; values: unknown }) {
+  const category = EMPLOYEE_CATEGORIES.find((item) => item.aliases.includes(normalizeSheetName(input.sheetName)));
+  if (!category) throw new Error("Choose a supported employee category worksheet.");
+  if (!Number.isInteger(input.sourceRow) || input.sourceRow < 1) throw new Error("Invalid worksheet row number.");
+  const result = correctionValuesSchema.safeParse(input.values);
+  if (!result.success) throw new Error(`Correct employee ID, name, designation, dates, and relay before saving: ${result.error.issues.map((issue) => issue.message).join("; ")}`);
+
+  const values = result.data;
+  await prisma.employeeImportCorrection.upsert({
+    where: { sheetName_sourceRow: { sheetName: category.name, sourceRow: input.sourceRow } },
+    create: { sheetName: category.name, sourceRow: input.sourceRow, values },
+    update: { values },
+  });
+  const syncResult = await syncGoogleDriveEmployeeMaster();
+  return { corrected: true, ...syncResult };
 }
 
 export async function syncGoogleDriveEmployeeMaster() {

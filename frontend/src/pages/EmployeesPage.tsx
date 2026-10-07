@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
-import { Search, Plus, Pencil, UserX, Loader2, FileUp, Download, Cloud, RefreshCw, Eye } from "lucide-react";
+import { Search, Plus, Pencil, UserX, Loader2, FileUp, Download, Cloud, RefreshCw, Eye, Save } from "lucide-react";
 import * as XLSX from "xlsx";
 
 import { Button } from "@/components/ui/button";
@@ -42,7 +42,9 @@ interface GoogleDriveStatus {
 
 interface GoogleDrivePreviewRow {
   sheet: string;
+  category: string;
   row: number;
+  corrected: boolean;
   employeeId: string;
   name: string;
   employeeType: string;
@@ -98,6 +100,7 @@ export function EmployeesPage() {
   const [previewSheet, setPreviewSheet] = useState("");
   const [previewSearchInput, setPreviewSearchInput] = useState("");
   const [previewSearch, setPreviewSearch] = useState("");
+  const [editingPreviewRow, setEditingPreviewRow] = useState<GoogleDrivePreviewRow | null>(null);
 
   const debouncedSetSearch = useDebouncedCallback((value: string) => {
     setSearch(value);
@@ -135,6 +138,27 @@ export function EmployeesPage() {
       params: { sheet: previewSheet || "ALL", employeeId: previewSearch || undefined },
     })).data.data,
     enabled: canEdit && previewOpen,
+  });
+  const savePreviewCorrection = useMutation({
+    mutationFn: (row: GoogleDrivePreviewRow) => apiClient.put("/google-drive/correction", {
+      sheetName: row.category,
+      sourceRow: row.row,
+      values: {
+        employeeId: row.employeeId,
+        name: row.name,
+        designation: row.designation,
+        dateOfBirth: row.dateOfBirth || null,
+        dateOfJoining: row.dateOfJoining || null,
+        pmeDate: row.pmeDate || null,
+        vtcDate: row.vtcDate || null,
+        relay: row.relay.replace("Relay ", "RELAY_").toUpperCase(),
+      },
+    }),
+    onSuccess: async () => {
+      setEditingPreviewRow(null);
+      await queryClient.invalidateQueries({ queryKey: ["google-drive", "preview"] });
+      await queryClient.invalidateQueries();
+    },
   });
 
   const openAddDialog = () => {
@@ -291,7 +315,7 @@ export function EmployeesPage() {
           <DialogContent className="max-w-7xl">
             <DialogHeader>
               <DialogTitle>Google Drive employee sheet</DialogTitle>
-              <DialogDescription>Read-only preview of the selected worksheet.</DialogDescription>
+              <DialogDescription>Cleaned employee data. Corrections are saved in MWOMS and applied on future syncs.</DialogDescription>
             </DialogHeader>
             {googleDrivePreview.isLoading ? (
               <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>
@@ -317,39 +341,62 @@ export function EmployeesPage() {
                     {previewSearch ? `${googleDrivePreview.data.matchedRows} matching rows` : `Showing ${googleDrivePreview.data.rows.length} of ${googleDrivePreview.data.totalRows} rows`}{googleDrivePreview.data.truncated ? " · first 100 matches shown" : ""}
                   </span>
                 </div>
+                {savePreviewCorrection.error && (
+                  <p className="rounded-md border border-danger/20 bg-danger/10 p-3 text-sm text-danger">
+                    {(savePreviewCorrection.error as { response?: { data?: { error?: string } } }).response?.data?.error ?? "Could not save this row correction."}
+                  </p>
+                )}
                 <div className="max-h-[65vh] overflow-auto rounded-md border border-border">
                   <table className="min-w-max border-collapse text-xs">
                     <thead className="sticky top-0 bg-muted text-muted-foreground">
                       <tr>
-                        {["Sheet", "Row", "Employee ID", "Name", "Type", "Designation", "Grade", "Department", "Skill", "DOB", "DOJ", "PME Date", "PME Due", "VTC Date", "VTC Due", "Relay", "Issues"].map((heading) => (
+                        {["Sheet", "Row", "Employee ID", "Name", "Type", "Designation", "Grade", "Department", "Skill", "DOB", "DOJ", "PME Date", "PME Due", "VTC Date", "VTC Due", "Relay", "Issues", "Edit"].map((heading) => (
                           <th key={heading} className="border-b border-r border-border px-3 py-2 text-left font-medium">{heading}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {googleDrivePreview.data.rows.map((row) => (
-                        <tr key={`${row.sheet}-${row.row}`} className="odd:bg-background even:bg-muted/20">
+                        <tr key={`${row.sheet}-${row.row}`} className={`odd:bg-background even:bg-muted/20 ${row.issues.length ? "bg-danger/5" : ""}`}>
                           <td className="border-b border-r border-border px-3 py-1.5">{row.sheet}</td>
                           <td className="border-b border-r border-border px-3 py-1.5">{row.row}</td>
-                          <td className="border-b border-r border-border px-3 py-1.5 font-medium">{row.employeeId || "—"}</td>
-                          <td className="border-b border-r border-border px-3 py-1.5">{row.name || "—"}</td>
+                          <td className="border-b border-r border-border px-2 py-1">{editingPreviewRow?.sheet === row.sheet && editingPreviewRow.row === row.row ? <Input className="h-8 min-w-32" value={editingPreviewRow.employeeId} onChange={(event) => setEditingPreviewRow({ ...editingPreviewRow, employeeId: event.target.value })} /> : <span className="font-medium">{row.employeeId || "—"}</span>}</td>
+                          <td className="border-b border-r border-border px-2 py-1">{editingPreviewRow?.sheet === row.sheet && editingPreviewRow.row === row.row ? <Input className="h-8 min-w-40" value={editingPreviewRow.name} onChange={(event) => setEditingPreviewRow({ ...editingPreviewRow, name: event.target.value })} /> : row.name || "—"}</td>
                           <td className="border-b border-r border-border px-3 py-1.5">{row.employeeType}</td>
-                          <td className="border-b border-r border-border px-3 py-1.5">{row.designation || "—"}</td>
+                          <td className="border-b border-r border-border px-2 py-1">{editingPreviewRow?.sheet === row.sheet && editingPreviewRow.row === row.row ? <Input className="h-8 min-w-36" value={editingPreviewRow.designation} onChange={(event) => setEditingPreviewRow({ ...editingPreviewRow, designation: event.target.value })} /> : row.designation || "—"}</td>
                           <td className="border-b border-r border-border px-3 py-1.5">{row.grade}</td>
                           <td className="border-b border-r border-border px-3 py-1.5">{row.department}</td>
                           <td className="border-b border-r border-border px-3 py-1.5">{row.skill}</td>
-                          <td className="border-b border-r border-border px-3 py-1.5">{row.dateOfBirth || "—"}</td>
-                          <td className="border-b border-r border-border px-3 py-1.5">{row.dateOfJoining || "—"}</td>
-                          <td className="border-b border-r border-border px-3 py-1.5">{row.pmeDate || "—"}</td>
+                          <td className="border-b border-r border-border px-2 py-1">{editingPreviewRow?.sheet === row.sheet && editingPreviewRow.row === row.row ? <Input className="h-8 min-w-32" type="date" value={editingPreviewRow.dateOfBirth} onChange={(event) => setEditingPreviewRow({ ...editingPreviewRow, dateOfBirth: event.target.value })} /> : row.dateOfBirth || "—"}</td>
+                          <td className="border-b border-r border-border px-2 py-1">{editingPreviewRow?.sheet === row.sheet && editingPreviewRow.row === row.row ? <Input className="h-8 min-w-32" type="date" value={editingPreviewRow.dateOfJoining} onChange={(event) => setEditingPreviewRow({ ...editingPreviewRow, dateOfJoining: event.target.value })} /> : row.dateOfJoining || "—"}</td>
+                          <td className="border-b border-r border-border px-2 py-1">{editingPreviewRow?.sheet === row.sheet && editingPreviewRow.row === row.row ? <Input className="h-8 min-w-32" type="date" value={editingPreviewRow.pmeDate} onChange={(event) => setEditingPreviewRow({ ...editingPreviewRow, pmeDate: event.target.value })} /> : row.pmeDate || "—"}</td>
                           <td className="border-b border-r border-border px-3 py-1.5">{row.pmeDue || "—"}</td>
-                          <td className="border-b border-r border-border px-3 py-1.5">{row.vtcDate || "—"}</td>
+                          <td className="border-b border-r border-border px-2 py-1">{editingPreviewRow?.sheet === row.sheet && editingPreviewRow.row === row.row ? <Input className="h-8 min-w-32" type="date" value={editingPreviewRow.vtcDate} onChange={(event) => setEditingPreviewRow({ ...editingPreviewRow, vtcDate: event.target.value })} /> : row.vtcDate || "—"}</td>
                           <td className="border-b border-r border-border px-3 py-1.5">{row.vtcDue || "—"}</td>
-                          <td className="border-b border-r border-border px-3 py-1.5">{row.relay}</td>
-                          <td className="max-w-72 border-b border-r border-border px-3 py-1.5 text-danger">{row.issues.join("; ") || "—"}</td>
+                          <td className="border-b border-r border-border px-2 py-1">{editingPreviewRow?.sheet === row.sheet && editingPreviewRow.row === row.row ? (
+                            <select className="h-8 rounded-md border border-input bg-background px-2" value={editingPreviewRow.relay.replace("Relay ", "RELAY_").toUpperCase()} onChange={(event) => setEditingPreviewRow({ ...editingPreviewRow, relay: event.target.value.replace("RELAY_", "Relay ") })}>
+                              <option value="RELAY_A">Relay A</option><option value="RELAY_B">Relay B</option><option value="RELAY_C">Relay C</option>
+                            </select>
+                          ) : row.relay}</td>
+                          <td className="max-w-72 border-b border-r border-border px-3 py-1.5 text-danger">{row.corrected ? <span className="mr-1 text-success">Corrected. </span> : null}{row.issues.join("; ") || (row.corrected ? "No issues" : "—")}</td>
+                          <td className="border-b border-r border-border px-2 py-1">
+                            {editingPreviewRow?.sheet === row.sheet && editingPreviewRow.row === row.row ? (
+                              <div className="flex gap-1">
+                                <Button size="sm" variant="outline" aria-label="Save correction" disabled={savePreviewCorrection.isPending} onClick={() => savePreviewCorrection.mutate(editingPreviewRow)}>
+                                  {savePreviewCorrection.isPending ? <Loader2 className="animate-spin" /> : <Save />}
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => { setEditingPreviewRow(null); savePreviewCorrection.reset(); }}>Cancel</Button>
+                              </div>
+                            ) : (
+                              <Button size="sm" variant="ghost" aria-label={`Edit ${row.employeeId || `row ${row.row}`}`} onClick={() => { setEditingPreviewRow({ ...row }); savePreviewCorrection.reset(); }}>
+                                <Pencil />
+                              </Button>
+                            )}
+                          </td>
                         </tr>
                       ))}
                       {googleDrivePreview.data.rows.length === 0 && (
-                        <tr><td colSpan={17} className="px-3 py-8 text-center text-muted-foreground">No employee rows match this search.</td></tr>
+                        <tr><td colSpan={19} className="px-3 py-8 text-center text-muted-foreground">No employee rows match this search.</td></tr>
                       )}
                     </tbody>
                   </table>

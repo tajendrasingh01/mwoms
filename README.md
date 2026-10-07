@@ -46,3 +46,7 @@ disable scheduled syncs. Matching employees are updated and new employees are
 added; rows removed from the file are not deleted or deactivated.
 Spreadsheet-owned fields refresh while MWOMS active status and experience
 values are preserved.
+
+Admins can correct a source row in the Employee Master sheet preview. These
+corrections are stored in MWOMS and reapplied on later syncs; they do not write
+back to the Google Drive file.
