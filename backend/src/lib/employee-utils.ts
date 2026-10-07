@@ -20,7 +20,7 @@ function addYears(date: Date, years: number): Date {
 
 export function calculatePmeDueDate(dateOfBirth: Date, pmeDate: Date): Date | null {
   const age = calculateAge(dateOfBirth);
-  const frequencyYears = age < 45 ? 5 : 3;
+  const frequencyYears = age < 45 ? 5 : age < 50 ? 3 : 1;
   return addYears(pmeDate, frequencyYears);
 }
 
