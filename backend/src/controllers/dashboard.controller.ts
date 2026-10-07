@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 
 import { prisma } from "@/lib/prisma";
-import { getDueStatusForEmployee, isRetired } from "@/lib/employee-utils";
+import { calculatePmeDueDate, calculateVtcDueDate, getExpiryStatus, isRetired } from "@/lib/employee-utils";
 import { serializeShiftAllocation } from "@/lib/shift-allocation-utils";
 import { serializeEmployee } from "@/lib/employee-utils";
 import { SHIFT_TYPES, SHIFT_SCHEDULE, type ShiftTypeValue } from "@/constants/shift-schedule";
@@ -57,7 +57,7 @@ export async function getDashboardSummary(_req: Request, res: Response) {
     prisma.employee.count({ where: { isActive: true } }),
     prisma.employee.findMany({
       where: { isActive: true, employmentStatus: "ACTIVE" },
-      select: { dateOfBirth: true, pmeExpiry: true, vtcExpiry: true },
+      select: { dateOfBirth: true, pmeDate: true, vtcDate: true, employeeType: true },
     }),
     current
       ? prisma.shiftAllocationEmployee.count({
@@ -70,21 +70,23 @@ export async function getDashboardSummary(_req: Request, res: Response) {
 
   const pmeDueSoon = employees.filter((e) => {
     if (isRetired(e.dateOfBirth)) return false;
-    const s = getDueStatusForEmployee(e.dateOfBirth, e.pmeExpiry);
+    const expiry = e.dateOfBirth && e.pmeDate ? calculatePmeDueDate(e.dateOfBirth, e.pmeDate) : null;
+    const s = getExpiryStatus(expiry);
     return s === "DUE_SOON";
   }).length;
   const pmeExpired = employees.filter((e) => {
     if (isRetired(e.dateOfBirth)) return false;
-    return getDueStatusForEmployee(e.dateOfBirth, e.pmeExpiry) === "EXPIRED";
+    const expiry = e.dateOfBirth && e.pmeDate ? calculatePmeDueDate(e.dateOfBirth, e.pmeDate) : null;
+    return getExpiryStatus(expiry) === "EXPIRED";
   }).length;
   const vtcDueSoon = employees.filter((e) => {
-    if (isRetired(e.dateOfBirth)) return false;
-    const s = getDueStatusForEmployee(e.dateOfBirth, e.vtcExpiry);
+    if (e.employeeType !== "DAILY_RATED" || !e.vtcDate) return false;
+    const s = getExpiryStatus(calculateVtcDueDate(e.vtcDate));
     return s === "DUE_SOON";
   }).length;
   const vtcExpired = employees.filter((e) => {
-    if (isRetired(e.dateOfBirth)) return false;
-    return getDueStatusForEmployee(e.dateOfBirth, e.vtcExpiry) === "EXPIRED";
+    if (e.employeeType !== "DAILY_RATED" || !e.vtcDate) return false;
+    return getExpiryStatus(calculateVtcDueDate(e.vtcDate)) === "EXPIRED";
   }).length;
 
   return res.json({
@@ -112,24 +114,15 @@ export async function getComplianceEmployees(req: Request, res: Response) {
     return res.status(400).json({ error: "Compliance type must be pme or vtc" });
   }
 
-  const now = new Date();
-  const dueSoon = new Date(now);
-  dueSoon.setDate(dueSoon.getDate() + 30);
   const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
   const statusParam = typeof req.query.status === "string" ? req.query.status : undefined;
   const employmentStatus = typeof req.query.employmentStatus === "string" ? req.query.employmentStatus : undefined;
-  const expiryField = type === "pme" ? "pmeExpiry" : "vtcExpiry";
   const expiryStatus = statusParam === "DUE_SOON" || statusParam === "EXPIRED" ? statusParam : undefined;
-  const dueSoonFilter = expiryStatus === "DUE_SOON"
-    ? { gt: now, lte: dueSoon }
-    : expiryStatus === "EXPIRED"
-      ? { lt: now }
-      : { lte: dueSoon };
   const employees = await prisma.employee.findMany({
     where: {
       isActive: true,
       employmentStatus: employmentStatus === "TRANSFERRED" || employmentStatus === "NOT_ENROLLED" ? employmentStatus : "ACTIVE",
-      [expiryField]: dueSoonFilter,
+      ...(type === "vtc" ? { employeeType: "DAILY_RATED" } : {}),
       ...(search
         ? {
             OR: [
@@ -139,12 +132,25 @@ export async function getComplianceEmployees(req: Request, res: Response) {
           }
         : {}),
     },
-    orderBy: [{ [expiryField]: "asc" }, { name: "asc" }],
   });
 
-  const filtered = employees.filter((employee) => !isRetired(employee.dateOfBirth));
+  const filtered = employees
+    .filter((employee) => type === "vtc" || !isRetired(employee.dateOfBirth))
+    .map((employee) => {
+      const expiry = type === "pme"
+        ? employee.dateOfBirth && employee.pmeDate ? calculatePmeDueDate(employee.dateOfBirth, employee.pmeDate) : null
+        : employee.employeeType === "DAILY_RATED" && employee.vtcDate ? calculateVtcDueDate(employee.vtcDate) : null;
+      return { employee, expiry, status: getExpiryStatus(expiry) };
+    })
+    .filter(({ status }) =>
+      expiryStatus ? status === expiryStatus : status === "DUE_SOON" || status === "EXPIRED",
+    )
+    .sort((a, b) =>
+      (a.expiry?.getTime() ?? 0) - (b.expiry?.getTime() ?? 0) || a.employee.name.localeCompare(b.employee.name),
+    )
+    .map(({ employee }) => serializeEmployee(employee));
 
-  return res.json({ data: filtered.map(serializeEmployee) });
+  return res.json({ data: filtered });
 }
 
 /**

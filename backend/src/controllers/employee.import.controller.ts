@@ -425,15 +425,6 @@ export function validateParsedRows(rows: ParsedEmployeeRow[]): ImportError[] {
     if (row.pmeDate === null) {
       errors.push({ row: rowIndex, employeeId: row.employeeId, field: "PME", error: "PME must be a valid date or blank" });
     }
-    if (row.pmeExpiry === null) {
-      errors.push({ row: rowIndex, employeeId: row.employeeId, field: "Expiry PME", error: "Expiry PME must be a valid date or blank" });
-    }
-    if (row.employeeType !== "MONTHLY_RATED" && row.employeeType !== "STAFF" && row.employeeType !== "EXECUTIVE" && row.vtcDate === null) {
-      errors.push({ row: rowIndex, employeeId: row.employeeId, field: "VTC", error: "VTC must be a valid date or blank" });
-    }
-    if (row.employeeType !== "MONTHLY_RATED" && row.employeeType !== "STAFF" && row.employeeType !== "EXECUTIVE" && row.vtcExpiry === null) {
-      errors.push({ row: rowIndex, employeeId: row.employeeId, field: "Expiry VTC", error: "Expiry VTC must be a valid date or blank" });
-    }
     if (row.employeeId) {
       const key = row.employeeId.trim();
       if (!seenEis.has(key)) {
@@ -461,10 +452,11 @@ export function validateParsedRows(rows: ParsedEmployeeRow[]): ImportError[] {
 }
 
 export function rowToEmployeeData(row: ParsedEmployeeRow) {
+  const employeeType = row.employeeType ?? "DAILY_RATED";
   const pmeDate = row.pmeDate ?? null;
-  const vtcDate = row.employeeType !== "MONTHLY_RATED" && row.employeeType !== "STAFF" && row.employeeType !== "EXECUTIVE" ? row.vtcDate ?? null : null;
-  const pmeExpiry = row.pmeExpiry ?? (pmeDate && row.dateOfBirth ? calculatePmeDueDate(row.dateOfBirth, pmeDate) : null);
-  const vtcExpiry = row.vtcExpiry ?? (vtcDate ? calculateVtcDueDate(vtcDate) : null);
+  const vtcDate = employeeType === "DAILY_RATED" ? row.vtcDate ?? null : null;
+  const pmeExpiry = pmeDate && row.dateOfBirth ? calculatePmeDueDate(row.dateOfBirth, pmeDate) : null;
+  const vtcExpiry = vtcDate ? calculateVtcDueDate(vtcDate) : null;
   return {
     employeeId: row.employeeId!.trim(),
     name: row.name!.trim(),
@@ -482,7 +474,7 @@ export function rowToEmployeeData(row: ParsedEmployeeRow) {
     medicalConditions: row.medicalConditions?.trim() || null,
     remark: row.remark?.trim() || null,
     relay: row.relay!,
-    employeeType: row.employeeType ?? "DAILY_RATED",
+    employeeType,
     // Experience is not supplied by the template as a reliable value.
     // The app continues to preserve this field, but imported rows set
     // a default of 0 so they become valid employee records.

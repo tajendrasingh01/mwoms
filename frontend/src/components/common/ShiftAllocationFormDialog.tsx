@@ -99,11 +99,13 @@ function ShiftAllocationForm({
 
   const excludeIds = new Set(assigned.map((a) => a.employee.id));
 
-  const expiredCount = assigned.filter(
-    (a) => a.employee.pmeStatus === "EXPIRED" || a.employee.vtcStatus === "EXPIRED",
+  const overdueCount = assigned.filter(
+    (a) => a.employee.pmeStatus === "OVERDUE" || a.employee.vtcStatus === "OVERDUE",
   ).length;
   const dueSoonCount = assigned.filter(
-    (a) => a.employee.pmeStatus === "DUE_SOON" || a.employee.vtcStatus === "DUE_SOON",
+    (a) =>
+      (a.employee.pmeDaysLeft !== null && a.employee.pmeDaysLeft >= 0 && a.employee.pmeDaysLeft <= 30) ||
+      (a.employee.vtcDaysLeft !== null && a.employee.vtcDaysLeft >= 0 && a.employee.vtcDaysLeft <= 30),
   ).length;
 
   const handleAdd = (employee: Employee) => {
@@ -203,11 +205,11 @@ function ShiftAllocationForm({
             <EmployeeSearchPicker excludeIds={excludeIds} onAdd={handleAdd} />
           </div>
 
-          {(expiredCount > 0 || dueSoonCount > 0) && (
+          {(overdueCount > 0 || dueSoonCount > 0) && (
             <div className="flex items-start gap-2 rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>
-                {expiredCount > 0 && `${expiredCount} assigned employee(s) have expired PME/VTC. `}
+                {overdueCount > 0 && `${overdueCount} assigned employee(s) have overdue PME/VTC. `}
                 {dueSoonCount > 0 && `${dueSoonCount} assigned employee(s) have PME/VTC due soon.`}
               </span>
             </div>

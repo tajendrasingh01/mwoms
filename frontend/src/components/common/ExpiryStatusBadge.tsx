@@ -1,17 +1,19 @@
 import { Badge } from "@/components/ui/badge";
-import type { ExpiryStatus } from "@/types/employee";
+import type { PmeStatus, VtcStatus } from "@/types/employee";
 
 const STATUS_CONFIG: Record<
-  ExpiryStatus,
+  PmeStatus | VtcStatus,
   { label: string; variant: "success" | "warning" | "danger" | "secondary" }
 > = {
   VALID: { label: "Valid", variant: "success" },
-  DUE_SOON: { label: "Due soon", variant: "warning" },
-  EXPIRED: { label: "Expired", variant: "danger" },
+  "DUE TODAY": { label: "Due today", variant: "warning" },
+  OVERDUE: { label: "Overdue", variant: "danger" },
   NOT_SET: { label: "Not set", variant: "secondary" },
+  RETIRED: { label: "Retired", variant: "secondary" },
+  "N/A": { label: "N/A", variant: "secondary" },
 };
 
-export function ExpiryStatusBadge({ status }: { status: ExpiryStatus }) {
+export function ExpiryStatusBadge({ status }: { status: PmeStatus | VtcStatus }) {
   const config = STATUS_CONFIG[status];
   return <Badge variant={config.variant}>{config.label}</Badge>;
 }

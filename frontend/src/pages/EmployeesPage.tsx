@@ -94,8 +94,8 @@ export function EmployeesPage() {
   const [designation, setDesignation] = useState("");
   const [department, setDepartment] = useState("");
   const [relay, setRelay] = useState<"" | "RELAY_A" | "RELAY_B" | "RELAY_C">("");
-  const [pmeStatus, setPmeStatus] = useState<"" | "EXPIRED" | "DUE_SOON" | "VALID" | "NOT_SET">("");
-  const [vtcStatus, setVtcStatus] = useState<"" | "EXPIRED" | "DUE_SOON" | "VALID" | "NOT_SET">("");
+  const [pmeStatus, setPmeStatus] = useState<"" | "OVERDUE" | "DUE TODAY" | "VALID" | "NOT_SET" | "RETIRED">("");
+  const [vtcStatus, setVtcStatus] = useState<"" | "OVERDUE" | "DUE TODAY" | "VALID" | "NOT_SET" | "N/A">("");
   const [activeFilter, setActiveFilter] = useState<"" | "true" | "false">("");
   const [employmentStatus, setEmploymentStatus] = useState<"" | EmploymentStatus>("");
   const [isExporting, setIsExporting] = useState(false);
@@ -431,17 +431,19 @@ export function EmployeesPage() {
         </select>
         <select className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={pmeStatus} onChange={(e) => { setPmeStatus(e.target.value as typeof pmeStatus); setPage(1); }}>
           <option value="">All PME statuses</option>
-          <option value="EXPIRED">PME expired</option>
-          <option value="DUE_SOON">PME near expiry</option>
+          <option value="OVERDUE">PME overdue</option>
+          <option value="DUE TODAY">PME due today</option>
           <option value="VALID">PME valid</option>
           <option value="NOT_SET">PME not set</option>
+          <option value="RETIRED">Retired</option>
         </select>
         <select className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={vtcStatus} onChange={(e) => { setVtcStatus(e.target.value as typeof vtcStatus); setPage(1); }}>
           <option value="">All VTC statuses</option>
-          <option value="EXPIRED">VTC expired</option>
-          <option value="DUE_SOON">VTC near expiry</option>
+          <option value="OVERDUE">VTC overdue</option>
+          <option value="DUE TODAY">VTC due today</option>
           <option value="VALID">VTC valid</option>
           <option value="NOT_SET">VTC not set</option>
+          <option value="N/A">Not applicable</option>
         </select>
         <select className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={activeFilter} onChange={(e) => { setActiveFilter(e.target.value as typeof activeFilter); setPage(1); }}>
           <option value="">All statuses</option>
@@ -504,8 +506,8 @@ export function EmployeesPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {employee.employeeType === "MONTHLY_RATED" || employee.employeeType === "STAFF" || employee.employeeType === "EXECUTIVE" ? (
-                        <span className="text-xs text-muted-foreground">Not required for MR</span>
+                      {employee.employeeType !== "DAILY_RATED" ? (
+                        <span className="text-xs text-muted-foreground">Not applicable</span>
                       ) : <div className="text-xs">
                         <ExpiryStatusBadge status={employee.vtcStatus} />
                         <div className="mt-1 text-muted-foreground">Date: {displayDate(employee.vtcDate)}</div>

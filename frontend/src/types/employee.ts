@@ -1,4 +1,6 @@
-export type ExpiryStatus = "EXPIRED" | "DUE_SOON" | "VALID" | "NOT_SET";
+export type CertificationStatus = "OVERDUE" | "DUE TODAY" | "VALID" | "NOT_SET";
+export type PmeStatus = CertificationStatus | "RETIRED";
+export type VtcStatus = CertificationStatus | "N/A";
 export type EmploymentStatus = "ACTIVE" | "TRANSFERRED" | "NOT_ENROLLED";
 
 export interface Employee {
@@ -17,11 +19,11 @@ export interface Employee {
   pmeDate: string | null;
   pmeExpiry: string | null;
   pmeDaysLeft: number | null;
-  pmeStatus: ExpiryStatus;
+  pmeStatus: PmeStatus;
   vtcDate: string | null;
   vtcExpiry: string | null;
   vtcDaysLeft: number | null;
-  vtcStatus: ExpiryStatus;
+  vtcStatus: VtcStatus;
   leaveStart: string | null;
   leaveEnd: string | null;
   rejoiningDate: string | null;
@@ -98,8 +100,8 @@ export interface EmployeeListParams {
   designation?: string;
   department?: string;
   relay?: "RELAY_A" | "RELAY_B" | "RELAY_C";
-  pmeStatus?: ExpiryStatus;
-  vtcStatus?: ExpiryStatus;
+  pmeStatus?: PmeStatus;
+  vtcStatus?: VtcStatus;
   employmentStatus?: EmploymentStatus;
   isActive?: boolean;
   page?: number;

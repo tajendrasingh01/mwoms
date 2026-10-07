@@ -31,43 +31,57 @@ function addYears(date: Date, years: number): Date {
   return result;
 }
 
-function addMonths(date: Date, months: number): Date {
-  const result = new Date(date);
-  result.setMonth(result.getMonth() + months);
-  return result;
-}
-
-export function calculatePmeDueDate(dateOfBirth: Date, pmeDate: Date): Date {
+export function calculatePmeDueDate(dateOfBirth: Date, pmeDate: Date): Date | null {
+  if (isRetired(dateOfBirth)) return null;
   const ageAtPme = calculateAgeAt(dateOfBirth, pmeDate);
-  const frequencyYears = ageAtPme <= 50 ? 3 : 1;
+  if (ageAtPme >= 60) return null;
+  const frequencyYears = ageAtPme < 45 ? 5 : 3;
   return addYears(pmeDate, frequencyYears);
 }
 
-export function calculateVtcDueDate(vtcDate: Date, absenceDays = 0, rejoiningDate?: Date | null): Date {
-  if (absenceDays > 365 && rejoiningDate) return addMonths(rejoiningDate, 1);
-  return addYears(vtcDate, 5);
+export function calculateVtcDueDate(vtcDate: Date): Date {
+  return addYears(vtcDate, 4);
 }
 
 const EXPIRY_WARNING_WINDOW_DAYS = 30;
 
 export type ExpiryStatus = "EXPIRED" | "DUE_SOON" | "VALID" | "NOT_SET";
+export type CertificationStatus = "OVERDUE" | "DUE TODAY" | "VALID" | "NOT_SET";
+export type PmeStatus = CertificationStatus | "RETIRED";
+export type VtcStatus = CertificationStatus | "N/A";
 
-export function getExpiryStatus(expiry: Date | null): ExpiryStatus {
+function getCertificationStatus(expiry: Date | null): CertificationStatus {
   if (!expiry) return "NOT_SET";
-  const now = new Date();
-  const warningThreshold = new Date();
-  warningThreshold.setDate(now.getDate() + EXPIRY_WARNING_WINDOW_DAYS);
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 
-  if (expiry < now) return "EXPIRED";
-  if (expiry <= warningThreshold) return "DUE_SOON";
+  if (expiry < today) return "OVERDUE";
+  if (expiry < tomorrow) return "DUE TODAY";
   return "VALID";
 }
 
-export function getDueStatusForEmployee(dateOfBirth: Date | null | undefined, expiry: Date | null): ExpiryStatus {
-  if (dateOfBirth && isRetired(dateOfBirth)) {
-    return expiry ? "VALID" : "NOT_SET";
-  }
-  return getExpiryStatus(expiry);
+export function getPmeStatus(dateOfBirth: Date | null | undefined, expiry: Date | null): PmeStatus {
+  if (dateOfBirth && isRetired(dateOfBirth)) return "RETIRED";
+  return getCertificationStatus(expiry);
+}
+
+export function getVtcStatus(employeeType: Employee["employeeType"], expiry: Date | null): VtcStatus {
+  if (employeeType !== "DAILY_RATED") return "N/A";
+  return getCertificationStatus(expiry);
+}
+
+export function getExpiryStatus(expiry: Date | null): ExpiryStatus {
+  if (!expiry) return "NOT_SET";
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const warningThreshold = new Date(today);
+  warningThreshold.setUTCDate(warningThreshold.getUTCDate() + EXPIRY_WARNING_WINDOW_DAYS);
+
+  if (expiry < today) return "EXPIRED";
+  if (expiry <= warningThreshold) return "DUE_SOON";
+  return "VALID";
 }
 
 /** Whole days from now until `date` (negative if already past). */
@@ -87,6 +101,13 @@ export function getDaysLeft(date: Date | null): number | null {
  * shouldn't store (they'd go stale).
  */
 export function serializeEmployee(employee: Employee) {
+  const pmeExpiry =
+    !isRetired(employee.dateOfBirth) && employee.dateOfBirth && employee.pmeDate
+      ? calculatePmeDueDate(employee.dateOfBirth, employee.pmeDate)
+      : null;
+  const vtcDate = employee.employeeType === "DAILY_RATED" ? employee.vtcDate : null;
+  const vtcExpiry = vtcDate ? calculateVtcDueDate(vtcDate) : null;
+
   return {
     id: employee.id,
     employeeId: employee.employeeId,
@@ -101,17 +122,17 @@ export function serializeEmployee(employee: Employee) {
     skill: employee.skill,
     dateOfJoining: employee.dateOfJoining?.toISOString() ?? null,
     pmeDate: employee.pmeDate?.toISOString() ?? null,
-    pmeExpiry: employee.pmeExpiry?.toISOString() ?? null,
-    pmeDaysLeft: getDaysLeft(employee.pmeExpiry),
-    pmeStatus: getDueStatusForEmployee(employee.dateOfBirth, employee.pmeExpiry),
-    vtcDate: employee.vtcDate?.toISOString() ?? null,
-    vtcExpiry: employee.vtcExpiry?.toISOString() ?? null,
-    vtcDaysLeft: getDaysLeft(employee.vtcExpiry),
+    pmeExpiry: pmeExpiry?.toISOString() ?? null,
+    pmeDaysLeft: getDaysLeft(pmeExpiry),
+    pmeStatus: getPmeStatus(employee.dateOfBirth, pmeExpiry),
+    vtcDate: vtcDate?.toISOString() ?? null,
+    vtcExpiry: vtcExpiry?.toISOString() ?? null,
+    vtcDaysLeft: getDaysLeft(vtcExpiry),
     leaveStart: employee.leaveStart?.toISOString() ?? null,
     leaveEnd: employee.leaveEnd?.toISOString() ?? null,
     rejoiningDate: employee.rejoiningDate?.toISOString() ?? null,
     absenceDays: employee.absenceDays,
-    vtcStatus: getDueStatusForEmployee(employee.dateOfBirth, employee.vtcExpiry),
+    vtcStatus: getVtcStatus(employee.employeeType, vtcExpiry),
     medicalConditions: employee.medicalConditions ?? null,
     remark: employee.remark ?? null,
     relay: employee.relay,

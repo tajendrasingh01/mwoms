@@ -3,7 +3,7 @@ import { z } from "zod";
 const dateString = z.coerce.date();
 const relayEnum = z.enum(["Relay A", "Relay B", "Relay C"]);
 const relayInternal = z.enum(["RELAY_A", "RELAY_B", "RELAY_C"]);
-const expiryStatusEnum = z.enum(["EXPIRED", "DUE_SOON", "VALID", "NOT_SET"]);
+const expiryStatusEnum = z.enum(["OVERDUE", "DUE TODAY", "VALID", "NOT_SET", "RETIRED", "N/A"]);
 const employmentStatusEnum = z.enum(["ACTIVE", "TRANSFERRED", "NOT_ENROLLED"]);
 
 const relayTransform = relayEnum.transform((value) => {

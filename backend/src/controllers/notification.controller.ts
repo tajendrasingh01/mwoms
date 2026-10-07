@@ -2,7 +2,13 @@ import type { Request, Response } from "express";
 import type { Employee } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-import { getDueStatusForEmployee, getDaysUntil, isRetired } from "@/lib/employee-utils";
+import {
+  calculatePmeDueDate,
+  calculateVtcDueDate,
+  getDaysUntil,
+  getExpiryStatus,
+  isRetired,
+} from "@/lib/employee-utils";
 
 export interface ExpiryNotification {
   employeeId: string;
@@ -19,10 +25,12 @@ function buildNotifications(employees: Employee[]): ExpiryNotification[] {
   const notifications: ExpiryNotification[] = [];
 
   for (const employee of employees) {
-    if (isRetired(employee.dateOfBirth)) continue;
-
-    const pmeStatus = getDueStatusForEmployee(employee.dateOfBirth, employee.pmeExpiry);
-    if ((pmeStatus === "EXPIRED" || pmeStatus === "DUE_SOON") && employee.pmeExpiry) {
+    const retired = isRetired(employee.dateOfBirth);
+    const pmeExpiry = !retired && employee.dateOfBirth && employee.pmeDate
+      ? calculatePmeDueDate(employee.dateOfBirth, employee.pmeDate)
+      : null;
+    const pmeStatus = getExpiryStatus(pmeExpiry);
+    if ((pmeStatus === "EXPIRED" || pmeStatus === "DUE_SOON") && pmeExpiry) {
       notifications.push({
         employeeId: employee.employeeId,
         employeeDbId: employee.id,
@@ -30,13 +38,16 @@ function buildNotifications(employees: Employee[]): ExpiryNotification[] {
         designation: employee.designation,
         type: "PME",
         status: pmeStatus,
-        expiryDate: employee.pmeExpiry.toISOString(),
-        daysLeft: getDaysUntil(employee.pmeExpiry),
+        expiryDate: pmeExpiry.toISOString(),
+        daysLeft: getDaysUntil(pmeExpiry),
       });
     }
 
-    const vtcStatus = getDueStatusForEmployee(employee.dateOfBirth, employee.vtcExpiry);
-    if ((vtcStatus === "EXPIRED" || vtcStatus === "DUE_SOON") && employee.vtcExpiry) {
+    const vtcExpiry = employee.employeeType === "DAILY_RATED" && employee.vtcDate
+      ? calculateVtcDueDate(employee.vtcDate)
+      : null;
+    const vtcStatus = getExpiryStatus(vtcExpiry);
+    if ((vtcStatus === "EXPIRED" || vtcStatus === "DUE_SOON") && vtcExpiry) {
       notifications.push({
         employeeId: employee.employeeId,
         employeeDbId: employee.id,
@@ -44,8 +55,8 @@ function buildNotifications(employees: Employee[]): ExpiryNotification[] {
         designation: employee.designation,
         type: "VTC",
         status: vtcStatus,
-        expiryDate: employee.vtcExpiry.toISOString(),
-        daysLeft: getDaysUntil(employee.vtcExpiry),
+        expiryDate: vtcExpiry.toISOString(),
+        daysLeft: getDaysUntil(vtcExpiry),
       });
     }
   }

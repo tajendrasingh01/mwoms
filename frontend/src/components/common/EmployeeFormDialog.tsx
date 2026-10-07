@@ -278,11 +278,13 @@ export function EmployeeFormDialog({
                 <Field label="PME Date" error={errors.pmeDate?.message}>
                   <Input type="date" {...register("pmeDate")} />
                 </Field>
+                {selectedEmployeeType === "DAILY_RATED" && (
+                  <Field label="VTC Date" error={errors.vtcDate?.message}>
+                    <Input type="date" {...register("vtcDate")} />
+                  </Field>
+                )}
                 {(selectedEmployeeType === "DAILY_RATED" || selectedEmployeeType === "SURFACE_DR") && (
                   <>
-                    <Field label="VTC Date" error={errors.vtcDate?.message}>
-                      <Input type="date" {...register("vtcDate")} />
-                    </Field>
                     <Field label="Leave Start" error={errors.leaveStart?.message}>
                       <Input type="date" {...register("leaveStart")} />
                     </Field>
