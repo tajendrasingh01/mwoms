@@ -25,7 +25,7 @@ export function calculatePmeDueDate(dateOfBirth: Date, pmeDate: Date): Date | nu
 }
 
 export function calculateVtcDueDate(vtcDate: Date): Date {
-  return addYears(vtcDate, 4);
+  return addYears(vtcDate, 5);
 }
 
 const EXPIRY_WARNING_WINDOW_DAYS = 30;

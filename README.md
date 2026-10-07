@@ -34,7 +34,7 @@ Each employee row needs an ID, name, and designation. DOB and joining date are
 optional. The worksheet name determines employee type, grade, and department
 (`DR` becomes Daily Rated, `MR` becomes Monthly Rated, and `SURFACE DR` becomes
 Surface DR); skill is copied from designation. Experience and due-date columns
-are not required. VTC applies only to DR employees and is due four years after
+are not required. VTC applies only to DR employees and is due five years after
 the last VTC date; MR and Surface DR VTC due dates are N/A, and a blank VTC date
 stays blank. PME due dates use the employee's current age: under 45, add five
 years to the last PME date; ages 45–49, add three years; age 50 or older, add
