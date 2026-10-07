@@ -3,18 +3,18 @@ import type { Employee, Prisma } from "@prisma/client";
 /** Age in completed years as of today, from a date of birth. */
 export function calculateAge(dateOfBirth: Date): number {
   const today = new Date();
-  let age = today.getFullYear() - dateOfBirth.getFullYear();
+  let age = today.getUTCFullYear() - dateOfBirth.getUTCFullYear();
   const hasHadBirthdayThisYear =
-    today.getMonth() > dateOfBirth.getMonth() ||
-    (today.getMonth() === dateOfBirth.getMonth() &&
-      today.getDate() >= dateOfBirth.getDate());
+    today.getUTCMonth() > dateOfBirth.getUTCMonth() ||
+    (today.getUTCMonth() === dateOfBirth.getUTCMonth() &&
+      today.getUTCDate() >= dateOfBirth.getUTCDate());
   if (!hasHadBirthdayThisYear) age -= 1;
   return age;
 }
 
 function addYears(date: Date, years: number): Date {
   const result = new Date(date);
-  result.setFullYear(result.getFullYear() + years);
+  result.setUTCFullYear(result.getUTCFullYear() + years);
   return result;
 }
 

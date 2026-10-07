@@ -30,7 +30,9 @@ export async function createEmployeeRequest(req: Request, res: Response) {
     });
   }
 
-  const { employeeId, name, fatherName, dateOfBirth, experienceYrs, designation, department, skill, dateOfJoining, pmeDate, pmeExpiry, vtcDate, vtcExpiry, medicalConditions, remark, relay } = parseResult.data;
+  const { employeeId, name, fatherName, dateOfBirth, experienceYrs, designation, department, skill, dateOfJoining, pmeDate, vtcDate, medicalConditions, remark, relay } = parseResult.data;
+  const pmeExpiry = pmeDate ? calculatePmeDueDate(dateOfBirth, pmeDate) : null;
+  const vtcExpiry = vtcDate ? calculateVtcDueDate(vtcDate) : null;
   const userId = req.session.user!.id;
 
   const existingEmployee = await prisma.employee.findUnique({ where: { employeeId } });
